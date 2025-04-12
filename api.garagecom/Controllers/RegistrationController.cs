@@ -1,18 +1,157 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
+﻿using System.Net.Mail;
+using System.Text.RegularExpressions;
+using api.garagecom.Utils;
 using Microsoft.AspNetCore.Mvc;
+using MySql.Data.MySqlClient;
 
 namespace api.garagecom.Controllers
 {
     [Route("api/[controller]")]
-    [ApiController]
     public class RegistrationController : Controller
     {
-        [AllowAnonymous]
-        [Route("register")]
-        public IActionResult Register(string request)
+        [HttpPost("register")]
+        public ApiResponse Register(string userName, string email,string password, IFormFile? avatar = null)
         {
-            return Ok();
+            ApiResponse apiResponse = new ApiResponse();
+            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Please fill all fields";
+                return apiResponse;
+            }
+            
+            string pattern = "[^a-zA-Z0-9_.]";
+            
+            MatchCollection matches = Regex.Matches(userName, pattern);
+            
+            if (matches.Count > 0)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Username can only contain letters, numbers, underscores and dots";
+            }
+            
+            try
+            {
+                MailAddress mail = new MailAddress(email);
+                if (mail.Address != email)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Email is not valid";
+                    return apiResponse;
+                }
+            }
+            catch (Exception)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Email is not valid";
+                return apiResponse;
+            }
+            
+            string sql = @"SELECT COUNT(*) > 0 AS Existing
+                            FROM GeneralInformation
+                            WHERE LOWER(Email) = LOWER(@Email)
+                               OR LOWER(UserName) = LOWER(@UserName)";
+            MySqlParameter[] parameters =
+            [
+                new("Email", email),
+                new("UserName", userName)
+            ];
+            bool exists = DatabaseHelper.ExecuteScalar(sql,parameters).Parameters["Result"].ToString() == "1";
+            
+            if (exists)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "User already exists";
+                return apiResponse;
+            }
+            
+            sql = @"INSERT INTO GeneralInformation (UserName, Email, Password)
+                    VALUES (@UserName, @Email, @Password);
+                    SELECT LAST_INSERT_ID() Into @UserID;
+                    ";
+            parameters = [
+                new MySqlParameter("Email", email),
+                new MySqlParameter("UserName", userName),
+                new MySqlParameter("Password", GeneralHelper.HashEncrypt(password))
+            ];
+            
+            apiResponse = DatabaseHelper.ExecuteScalar(sql, parameters);
+            
+            var userId = Convert.ToInt32(apiResponse.Parameters["Result"].ToString());
+            
+            if (avatar != null)
+            {
+                // Avatar implementation
+            }
+            
+            string token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
+            
+            apiResponse.Parameters["Token"] = token;
+            apiResponse.Succeeded = true;
+            
+            return apiResponse;
+        }
+        
+        [HttpPost("login")]
+        public ApiResponse Login(string userName, string password)
+        {
+            ApiResponse apiResponse = new ApiResponse();
+            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(password))
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Please fill all fields";
+                return apiResponse;
+            }
+            
+            string pattern = "[^a-zA-Z0-9_.]";
+            
+            MatchCollection matches = Regex.Matches(userName, pattern);
+            
+            if (matches.Count > 0)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Username can only contain letters, numbers, underscores and dots";
+            }
+            
+            int userId;
+            string email;
+            
+            string sql = @"SELECT UserID, Email
+                            FROM GeneralInformation
+                            WHERE LOWER(UserName) = LOWER(@UserName) AND Password = @Password";
+            MySqlParameter[] parameters =
+            [
+                new("UserName", userName),
+                new("Password", GeneralHelper.HashEncrypt(password))
+            ];
+
+            using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+            {
+                if (reader.Read())
+                {
+                    userId = reader["UserID"] == DBNull.Value ? -1 : Convert.ToInt32(reader["UserID"]);
+                    email = reader["Email"].ToString()!;
+                }
+                else
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+            }
+            if (userId == -1)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "User not found";
+                return apiResponse;
+            }
+            
+            string token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
+            
+            apiResponse.Parameters["Token"] = token;
+            apiResponse.Succeeded = true;
+            
+            return apiResponse;
         }
     }
 }

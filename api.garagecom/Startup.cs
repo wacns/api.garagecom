@@ -6,12 +6,7 @@ namespace api.garagecom
 {
     public class Startup
     {
-        public IConfiguration Configuration { get; }
-        public Startup(IConfiguration configuration)
-        {
-            Configuration = configuration;
-        }
-        public class CustomMetadataProvider : IMetadataDetailsProvider, IDisplayMetadataProvider
+        private class CustomMetadataProvider : IDisplayMetadataProvider
         {
             public void CreateDisplayMetadata(DisplayMetadataProviderContext context)
             {
@@ -28,7 +23,7 @@ namespace api.garagecom
                     builder => builder
                     .AllowAnyMethod()
                     .AllowAnyHeader()
-                    .SetIsOriginAllowed((host) => true)
+                    .SetIsOriginAllowed(_ => true)
                     .AllowCredentials());
             });
 
@@ -48,21 +43,9 @@ namespace api.garagecom
             {
                 options.MinimumSameSitePolicy = SameSiteMode.None;
                 options.Secure = CookieSecurePolicy.Always;
-                options.OnAppendCookie = cookieContext =>
-                    CheckSameSite(cookieContext.Context, cookieContext.CookieOptions);
-                options.OnDeleteCookie = cookieContext =>
-                    CheckSameSite(cookieContext.Context, cookieContext.CookieOptions);
             });
         }
-        private void CheckSameSite(HttpContext httpContext, CookieOptions options)
-        {
-            if (httpContext.Request.IsHttps == false)
-                options.SameSite = SameSiteMode.None;
-            else
-                options.SameSite = SameSiteMode.None;
-        }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         [Obsolete]
         public void Configure(IApplicationBuilder app)
         {
