@@ -23,12 +23,58 @@ public class Post
     public List<Comment> Comments { get; set; }
 }
 
+public class PostCategory
+{
+    public int PostCategoryID { get; set; }
+    public string Title { get; set; }
+}
+
 namespace api.garagecom.Controllers
 {
     [ActionFilter]
     [Route("api/[controller]")]
     public class PostsController : Controller
     {
+        #region ComboBox
+
+        [HttpGet("GetPostCategories")]
+        public ApiResponse GetPostCategories()
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var postCategories = new List<PostCategory>();
+                var sql = @"SELECT PostCategoryID, Title
+                            FROM PostCategories";
+                MySqlParameter[] parameters = [];
+                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+                {
+                    while (reader.Read())
+                    {
+                        postCategories.Add(new PostCategory
+                        {
+                            PostCategoryID = reader["PostCategoryID"] != DBNull.Value
+                                ? Convert.ToInt32(reader["PostCategoryID"])
+                                : -1,
+                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!
+                        });
+                    }
+                }
+
+                apiResponse.Parameters["PostCategories"] = postCategories;
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+
+        #endregion
+
         #region Posts
 
         [HttpGet("GetPosts")]

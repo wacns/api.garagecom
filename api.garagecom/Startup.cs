@@ -67,6 +67,7 @@ namespace api.garagecom
             {
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(name: "Registration", pattern: "Registration/{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute(name: "Posts", pattern: "Posts/{controller=Home}/{action=Index}/{id?}");
                 endpoints.MapControllerRoute(name: "default", pattern: "{controller=Default}/{action=Index}/{id?}");
             });
         }
