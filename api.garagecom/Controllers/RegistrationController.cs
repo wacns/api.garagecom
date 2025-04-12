@@ -10,24 +10,34 @@ namespace api.garagecom.Controllers
     public class RegistrationController : Controller
     {
         [HttpPost("register")]
-        public ApiResponse Register(string userName, string email,string password, IFormFile? avatar = null)
+        public ApiResponse Register(string userName, string email,string password, string gender, string firstName, string lastName, string phoneNumber, IFormFile? avatar = null)
         {
             ApiResponse apiResponse = new ApiResponse();
-            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(gender) || string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
             {
                 apiResponse.Succeeded = false;
                 apiResponse.Message = "Please fill all fields";
                 return apiResponse;
             }
             
-            string pattern = "[^a-zA-Z0-9_.]";
+            string userNamePattern = "[^a-zA-Z0-9_.]";
+            string phoneNumberPattern = "^[0-9]{8}$";
             
-            MatchCollection matches = Regex.Matches(userName, pattern);
+            MatchCollection matches = Regex.Matches(userName, userNamePattern);
             
             if (matches.Count > 0)
             {
                 apiResponse.Succeeded = false;
                 apiResponse.Message = "Username can only contain letters, numbers, underscores and dots";
+                return apiResponse;
+            }
+            matches = Regex.Matches(phoneNumber, phoneNumberPattern);
+            
+            if (matches.Count != 1)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Phone Number can only contain 8 numbers";
+                return apiResponse;
             }
             
             try
@@ -65,14 +75,18 @@ namespace api.garagecom.Controllers
                 return apiResponse;
             }
             
-            sql = @"INSERT INTO GeneralInformation (UserName, Email, Password)
-                    VALUES (@UserName, @Email, @Password);
+            sql = @"INSERT INTO GeneralInformation (UserName, Email, Password, FirstName, LastName, CreatedIn, Gender, Mobile)
+                    VALUES (@UserName, @Email, @Password, @FirstName, @LastName, NOW(), @Gender, @PhoneNumber);
                     SELECT LAST_INSERT_ID() Into @UserID;
                     ";
             parameters = [
                 new MySqlParameter("Email", email),
                 new MySqlParameter("UserName", userName),
-                new MySqlParameter("Password", GeneralHelper.HashEncrypt(password))
+                new MySqlParameter("Password", GeneralHelper.HashEncrypt(password)),
+                new MySqlParameter("FirstName", firstName),
+                new MySqlParameter("LastName", lastName),
+                new MySqlParameter("Gender", gender),
+                new MySqlParameter("PhoneNumber", phoneNumber)
             ];
             
             apiResponse = DatabaseHelper.ExecuteScalar(sql, parameters);
