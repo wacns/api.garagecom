@@ -10,7 +10,7 @@ namespace api.garagecom.Controllers
     public class RegistrationController : Controller
     {
         [HttpPost("register")]
-        public ApiResponse Register(string userName, string email,string password, string gender, string firstName, string lastName, string phoneNumber, IFormFile? avatar = null)
+        public async Task<ApiResponse> Register(string userName, string email,string password, string gender, string firstName, string lastName, string phoneNumber, IFormFile? avatar = null)
         {
             ApiResponse apiResponse = new ApiResponse();
             if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(gender) || string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
@@ -95,7 +95,19 @@ namespace api.garagecom.Controllers
             
             if (avatar != null)
             {
-                // Avatar implementation
+                var fileName = $"{userId}_{Guid.NewGuid().ToString()}";
+                var succeeded = await S3Helper.UploadAttachmentAsync(avatar,fileName, "Images/Logos/");
+                if (succeeded)
+                {
+                    sql = @"UPDATE GeneralInformation
+                        SET Avatar = @Avatar
+                        WHERE UserID = @UserID";
+                    parameters = [
+                        new MySqlParameter("Avatar", fileName),
+                        new MySqlParameter("UserID", userId)
+                    ];
+                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                }
             }
             
             string token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
