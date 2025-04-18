@@ -6,10 +6,10 @@ namespace api.garagecom.Utils
 {
     public abstract class S3Helper
     {
-        private static readonly string AccessKey = Environment.GetEnvironmentVariable("ACCESS_KEY")!;
-        private static readonly string SecretKey = Environment.GetEnvironmentVariable("SECRET_KEY")!;
-        private static readonly string BucketName = Environment.GetEnvironmentVariable("BUCKET_NAME")!;
-        private static readonly string ServiceUrl = Environment.GetEnvironmentVariable("SERVICE_URL")!;
+        private static readonly string AccessKey = Environment.GetEnvironmentVariable("S3_ACCESS_KEY")!;
+        private static readonly string SecretKey = Environment.GetEnvironmentVariable("S3_SECRET_KEY")!;
+        private static readonly string BucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME")!;
+        private static readonly string ServiceUrl = Environment.GetEnvironmentVariable("S3_SERVICE_URL")!;
         private static IAmazonS3 CreateClient()
         {
             var credentials = new BasicAWSCredentials(AccessKey, SecretKey);

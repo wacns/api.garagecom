@@ -223,8 +223,8 @@ namespace api.garagecom.Controllers
                     new("Title", title),
                     new("PostCategoryID", postCategoryId)
                 ];
-
-                // File upload logic
+                
+                
 
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
