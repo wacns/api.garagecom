@@ -196,6 +196,7 @@ namespace api.garagecom.Utils
             // 5) output
             var body = await response.Content.ReadAsStringAsync();
 
+            // This part requires testing and refinement i was tired while developing it.
             var parsedJson = JObject.Parse(body);
             if (parsedJson["output"] is not JArray output) return defectsModel;
             foreach (var property in output)
