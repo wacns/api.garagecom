@@ -1,9 +1,12 @@
-﻿using System.Net.Http.Headers;
+﻿using System.ClientModel;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using OpenAI;
+using OpenAI.Chat;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace api.garagecom.Utils
@@ -12,27 +15,30 @@ namespace api.garagecom.Utils
 
     public class DetectDashboardRequest
     {
-        [JsonPropertyName("model")]            public string Model { get; set; }
-        [JsonPropertyName("input")]            public List<InputItem> Input { get; set; }
-        [JsonPropertyName("text")]             public Text Text { get; set; }
-        [JsonPropertyName("reasoning")]        public Dictionary<string, object> Reasoning { get; set; }
-        [JsonPropertyName("tools")]            public List<object> Tools { get; set; }
-        [JsonPropertyName("temperature")]      public double Temperature { get; set; }
-        [JsonPropertyName("max_output_tokens")]public int MaxOutputTokens { get; set; }
-        [JsonPropertyName("top_p")]            public int TopP { get; set; }
-        [JsonPropertyName("store")]            public bool Store { get; set; }
+        [JsonPropertyName("model")] public string Model { get; set; }
+        [JsonPropertyName("input")] public List<InputItem> Input { get; set; }
+        [JsonPropertyName("text")] public Text Text { get; set; }
+        [JsonPropertyName("reasoning")] public Dictionary<string, object> Reasoning { get; set; }
+        [JsonPropertyName("tools")] public List<object> Tools { get; set; }
+        [JsonPropertyName("temperature")] public double Temperature { get; set; }
+
+        [JsonPropertyName("max_output_tokens")]
+        public int MaxOutputTokens { get; set; }
+
+        [JsonPropertyName("top_p")] public int TopP { get; set; }
+        [JsonPropertyName("store")] public bool Store { get; set; }
     }
 
     public class InputItem
     {
-        [JsonPropertyName("role")]    public string Role { get; set; }
+        [JsonPropertyName("role")] public string Role { get; set; }
         [JsonPropertyName("content")] public List<ContentElement> Content { get; set; }
     }
 
     public class ContentElement
     {
-        [JsonPropertyName("type")]      public string Type { get; set; }
-        [JsonPropertyName("text")]      public string? Text { get; set; }
+        [JsonPropertyName("type")] public string Type { get; set; }
+        [JsonPropertyName("text")] public string? Text { get; set; }
         [JsonPropertyName("image_url")] public string? ImageUrl { get; set; }
     }
 
@@ -43,18 +49,20 @@ namespace api.garagecom.Utils
 
     public class Format
     {
-        [JsonPropertyName("type")]   public string Type { get; set; }
-        [JsonPropertyName("name")]   public string Name { get; set; }
+        [JsonPropertyName("type")] public string Type { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; }
         [JsonPropertyName("strict")] public bool Strict { get; set; }
         [JsonPropertyName("schema")] public Schema Schema { get; set; }
     }
 
     public class Schema
     {
-        [JsonPropertyName("type")]                 public string Type { get; set; }
-        [JsonPropertyName("properties")]           public Properties Properties { get; set; }
-        [JsonPropertyName("required")]             public List<string> Required { get; set; }
-        [JsonPropertyName("additionalProperties")] public bool AdditionalProperties { get; set; }
+        [JsonPropertyName("type")] public string Type { get; set; }
+        [JsonPropertyName("properties")] public Properties Properties { get; set; }
+        [JsonPropertyName("required")] public List<string> Required { get; set; }
+
+        [JsonPropertyName("additionalProperties")]
+        public bool AdditionalProperties { get; set; }
     }
 
     public class Properties
@@ -64,9 +72,9 @@ namespace api.garagecom.Utils
 
     public class DefectsProperty
     {
-        [JsonPropertyName("type")]        public string Type { get; set; }
+        [JsonPropertyName("type")] public string Type { get; set; }
         [JsonPropertyName("description")] public string Description { get; set; }
-        [JsonPropertyName("items")]       public Items Items { get; set; }
+        [JsonPropertyName("items")] public Items Items { get; set; }
     }
 
     public class Items
@@ -77,16 +85,17 @@ namespace api.garagecom.Utils
 
     public class DefectsModel
     {
-        public readonly List<string> Defects = null!;
+        public List<string> defects { get; set; }
     }
 
     // ─── Helper ─────────────────────────────────────────────────────────────────
 
     public static class AiHelper
     {
-        private static readonly string OpenaiApiKey = 
+        private static readonly string OpenaiApiKey =
             Environment.GetEnvironmentVariable("OPENAI_API_KEY")!;
-        private static readonly string OpenaiApiUrl = 
+
+        private static readonly string OpenaiApiUrl =
             "https://api.openai.com/v1/responses";
 
         // truly async!
@@ -101,27 +110,99 @@ namespace api.garagecom.Utils
             return Convert.ToBase64String(bytes);
         }
 
+        public static async Task<List<string>> GetDashboardSigns(IFormFile file)
+        {
+            byte[] imageBytes;
+            using (var memoryStream = new MemoryStream())
+            {
+                await file.CopyToAsync(memoryStream);
+                imageBytes = memoryStream.ToArray();
+            }
+            BinaryData binaryData = BinaryData.FromBytes(imageBytes);
+            OpenAIClient openAiClient = new OpenAIClient(OpenaiApiKey);
+            ChatClient chatClient = openAiClient.GetChatClient("gpt-4.1-mini");
+            List<ChatMessage> messages =
+            [
+                new UserChatMessage(ChatMessageContentPart.CreateImagePart(binaryData, file.ContentType, ChatImageDetailLevel.High)),
+                new SystemChatMessage("Detect the dashboard signs and return an empty array if nothing is detected or no image has been provided or detected.")
+            ];
+            ChatCompletionOptions options = new()
+            {
+                ResponseModalities = ChatResponseModalities.Text,
+                // ReasoningEffortLevel = ChatReasoningEffortLevel.High,
+                ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
+                    jsonSchemaFormatName: "dashboard_signs",
+                    jsonSchema: BinaryData.FromBytes("""
+                                                     {
+                                                       "type": "object",
+                                                       "properties": {
+                                                         "defects": {
+                                                           "type": "array",
+                                                           "description": "An array of detected elements \u2026",
+                                                           "items": {
+                                                             "type": "string",
+                                                             "enum": [
+                                                               "Abs",
+                                                               "Air Bag",
+                                                               "Air Suspension",
+                                                               "All Wheel Drive",
+                                                               "Battery",
+                                                               "Brake",
+                                                               "Check Engine",
+                                                               "Dashboard Signs",
+                                                               "High Temperature",
+                                                               "Lamp",
+                                                               "Low Fuel",
+                                                               "Oil",
+                                                               "Open Doors",
+                                                               "Open Hood",
+                                                               "Open Trunk",
+                                                               "Parking Brake",
+                                                               "Power Steering",
+                                                               "Seat Belt Reminder",
+                                                               "Tire Pressure",
+                                                               "Traction Control",
+                                                               "Transmission Temperature",
+                                                               "Unlock Gear Selector",
+                                                               "Washer Fluid"
+                                                             ]
+                                                           }
+                                                         }
+                                                       },
+                                                       "required": ["defects"],
+                                                       "additionalProperties": false
+                                                     }
+                                                     """u8.ToArray()),
+                    jsonSchemaIsStrict: true)
+            };
+            ChatCompletion completion = await chatClient.CompleteChatAsync(messages, options);
+            using JsonDocument structuredJson = JsonDocument.Parse(completion.Content[0].Text);
+            DefectsModel defects = JsonConvert.DeserializeObject<DefectsModel>(structuredJson.RootElement.ToString());
+            return defects?.defects ?? new List<string>();
+        }
+
         public static async Task<DefectsModel> GetDictionary(IFormFile? file)
         {
             DefectsModel defectsModel = new DefectsModel();
             // 1) build content elements
             var textElement = new ContentElement
             {
-                Type     = "input_text",
-                Text     = "Detect the dashboard signs and return an empty array if nothing is detected or no image has been provided or detected.",
+                Type = "input_text",
+                Text =
+                    "Detect the dashboard signs and return an empty array if nothing is detected or no image has been provided or detected.",
                 ImageUrl = null
             };
-            
+
             var base64 = await ConvertToBase64Async(file);
             var imageElement = new ContentElement
             {
-                Type     = "input_image",
-                Text     = null,
-                ImageUrl = base64 != null 
-                    ? $"data:{file?.ContentType};base64,{base64}" 
+                Type = "input_image",
+                Text = null,
+                ImageUrl = base64 != null
+                    ? $"data:{file?.ContentType};base64,{base64}"
                     : null
             };
-            
+
             // 2) build full payload
             var payload = new DetectDashboardRequest
             {
@@ -135,19 +216,19 @@ namespace api.garagecom.Utils
                 {
                     Format = new Format
                     {
-                        Type   = "json_schema",
-                        Name   = "detected_elements",
+                        Type = "json_schema",
+                        Name = "detected_elements",
                         Strict = true,
                         Schema = new Schema
                         {
-                            Type                 = "object",
-                            Properties           = new Properties
+                            Type = "object",
+                            Properties = new Properties
                             {
                                 Defects = new DefectsProperty
                                 {
-                                    Type        = "array",
+                                    Type = "array",
                                     Description = "An array of detected elements …",
-                                    Items       = new Items
+                                    Items = new Items
                                     {
                                         Type = "string",
                                         Enum =
@@ -164,35 +245,35 @@ namespace api.garagecom.Utils
                                     }
                                 }
                             },
-                            Required             = ["defects"],
+                            Required = ["defects"],
                             AdditionalProperties = false
                         }
                     }
                 },
-                Reasoning      = new Dictionary<string, object>(),
-                Tools          = [],
-                Temperature    = 0.2,
-                MaxOutputTokens= 10000,
-                TopP           = 1,
-                Store          = true
+                Reasoning = new Dictionary<string, object>(),
+                Tools = [],
+                Temperature = 0.2,
+                MaxOutputTokens = 10000,
+                TopP = 1,
+                Store = true
             };
-            
+
             // 3) serialize including nulls
             var options = new JsonSerializerOptions
             {
-                PropertyNamingPolicy   = JsonNamingPolicy.CamelCase,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
             var json = JsonSerializer.Serialize(payload, options);
-            
+
             // 4) send
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", OpenaiApiKey);
-            
+
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await client.PostAsync(OpenaiApiUrl, content);
-            
+
             // 5) output
             var body = await response.Content.ReadAsStringAsync();
 
@@ -201,7 +282,9 @@ namespace api.garagecom.Utils
             if (parsedJson["output"] is not JArray output) return defectsModel;
             foreach (var property in output)
             {
-                defectsModel = JsonConvert.DeserializeObject<DefectsModel>(property["content"]?[0]?["text"]?.ToString() ?? string.Empty) ?? new DefectsModel();
+                defectsModel =
+                    JsonConvert.DeserializeObject<DefectsModel>(property["content"]?[0]?["text"]?.ToString() ??
+                                                                string.Empty) ?? new DefectsModel();
             }
 
             return defectsModel;

@@ -11,16 +11,31 @@ public class Comment
     public int PostID { get; set; }
     public string CreatedIn { get; set; }
     public string Text { get; set; }
+    public string ModifiedIn { get; set; }
 }
 
 public class Post
 {
+    public PostCategory PostCategory { get; set; }
     public int PostID { get; set; }
     public int UserID { get; set; }
     public string Title { get; set; }
+    public string Description { get; set; }
+    public string Attachment { get; set; }
     public string CreatedIn { get; set; }
     public int PostCategoryID { get; set; }
     public List<Comment> Comments { get; set; }
+    public List<Vote> Votes { get; set; }
+}
+
+public class Vote
+{
+    public int VoteID { get; set; }
+    public int UserID { get; set; }
+    public int PostID { get; set; }
+    public string CreatedIn { get; set; }
+    public int Value { get; set; }
+    public string ModifiedIn { get; set; }
 }
 
 public class PostCategory
@@ -40,6 +55,8 @@ namespace api.garagecom.Controllers
         [HttpGet("GetPostCategories")]
         public ApiResponse GetPostCategories()
         {
+            string userName = (HttpContext.Items["UserName"] == null ? "" : HttpContext.Items["UserName"]!.ToString())!;
+            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
@@ -84,9 +101,11 @@ namespace api.garagecom.Controllers
             try
             {
                 var posts = new List<Post>();
-                var sql = @"SELECT PostID, UserID, Title, CreatedIn, PostCategoryID
+                var sql = @"SELECT PostID, UserID, Posts.Title, Posts.Description, Posts.Attachment, CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
-                            WHERE PostCategoryID IN (@PostCategoryID, -10) AND Status = 'Active'
+                            INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
+                            INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
+                            WHERE Posts.PostCategoryID IN (@PostCategoryID, -10) AND Statuses.Status = 'Active'
                             ORDER BY CreatedIn DESC";
                 MySqlParameter[] parameters =
                 [
@@ -103,16 +122,29 @@ namespace api.garagecom.Controllers
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
+                            Description = (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                            Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : ""
+                                : "",
+                            PostCategory = new PostCategory()
+                            {
+                                PostCategoryID = reader["PostCategoryID"] != DBNull.Value
+                                    ? Convert.ToInt32(reader["PostCategoryID"])
+                                    : -1,
+                                Title = (reader["CategoryTitle"] != DBNull.Value ? reader["CategoryTitle"].ToString() : "")!
+                            },
+                            Comments = [],
+                            Votes = []
                         });
                 }
 
-                sql = @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn
+                sql = @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
-                            WHERE Comments.Status = 'Active' AND Posts.Status = 'Active'";
+                            INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
+                            INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
+                            WHERE SP.Status = 'Active' AND SC.Status = 'Active'";
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
                     while (reader.Read())
@@ -127,7 +159,37 @@ namespace api.garagecom.Controllers
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            ModifiedIn = reader["ModifiedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : ""
+                        });
+                    }
+                }
+                
+                sql = @"SELECT Votes.VoteID, Votes.UserID, Votes.PostID, Votes.CreatedIn AS CreatedIn, Votes.Value AS VoteValue, Votes.ModifiedIn
+                            FROM Votes
+                            INNER JOIN Posts ON Votes.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
+                            INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
+                            WHERE Statuses.Status = 'Active'";
+                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+                {
+                    while (reader.Read())
+                    {
+                        var postId = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1;
+                        var post = posts.FirstOrDefault(p => p.PostID == postId);
+                        post?.Votes.Add(new Vote
+                        {
+                            UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
+                            PostID = postId,
+                            CreatedIn = reader["CreatedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            ModifiedIn = reader["ModifiedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            VoteID = reader["VoteID"] != DBNull.Value ? Convert.ToInt32(reader["VoteID"]) : -1,
+                            Value = reader["VoteValue"] != DBNull.Value ? Convert.ToInt32(reader["VoteValue"]) : -1
                         });
                     }
                 }
@@ -148,12 +210,14 @@ namespace api.garagecom.Controllers
         public ApiResponse GetPost(int postId)
         {
             var apiResponse = new ApiResponse();
+            var post = new Post();
             try
             {
-                var post = new Post();
-                var sql = @"SELECT PostID, UserID, Title, CreatedIn, PostCategoryID
+                var sql = @"SELECT PostID, UserID, Posts.Title, Posts.Description, Posts.Attachment, CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
-                            WHERE PostID = @PostID AND Status = 'Active'
+                            INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
+                            INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
+                            WHERE Statuses.Status = 'Active' AND Posts.PostID = @PostID
                             ORDER BY CreatedIn DESC";
                 MySqlParameter[] parameters =
                 [
@@ -161,7 +225,7 @@ namespace api.garagecom.Controllers
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
-                    while (reader.Read())
+                    if (reader.Read())
                         post = new Post
                         {
                             PostID = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1,
@@ -170,34 +234,75 @@ namespace api.garagecom.Controllers
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
+                            Description = (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                            Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : ""
+                                : "",
+                            PostCategory = new PostCategory()
+                            {
+                                PostCategoryID = reader["PostCategoryID"] != DBNull.Value
+                                    ? Convert.ToInt32(reader["PostCategoryID"])
+                                    : -1,
+                                Title = (reader["CategoryTitle"] != DBNull.Value ? reader["CategoryTitle"].ToString() : "")!
+                            },
+                            Comments = [],
+                            Votes = []
                         };
                 }
 
-                sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, IFNULL(Comments.ModifiedIn, Comments.CreatedIn) AS CreatedIn
+                sql = @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
-                            WHERE Comments.Status = 'Active' AND Posts.Status = 'Active'";
+                            INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
+                            INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
+                            WHERE SP.Status = 'Active' AND SC.Status = 'Active'";
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
                     while (reader.Read())
-                        post.Comments.Add(new Comment
+                    {
+                        post?.Comments.Add(new Comment
                         {
-                            CommentID = reader["CommentID"] != DBNull.Value ? Convert.ToInt32(reader["CommentID"]) : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             ParentID = reader["ParentID"] != DBNull.Value ? Convert.ToInt32(reader["ParentID"]) : -1,
                             PostID = postId,
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            ModifiedIn = reader["ModifiedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : ""
                         });
+                    }
+                }
+                
+                sql = @"SELECT Votes.VoteID, Votes.UserID, Votes.PostID, Votes.CreatedIn AS CreatedIn, Votes.Value AS VoteValue, Votes.ModifiedIn
+                            FROM Votes
+                            INNER JOIN Posts ON Votes.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
+                            INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
+                            WHERE Statuses.Status = 'Active'";
+                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+                {
+                    while (reader.Read())
+                    {
+                        post?.Votes.Add(new Vote
+                        {
+                            UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
+                            PostID = postId,
+                            CreatedIn = reader["CreatedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            ModifiedIn = reader["ModifiedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            VoteID = reader["VoteID"] != DBNull.Value ? Convert.ToInt32(reader["VoteID"]) : -1,
+                            Value = reader["VoteValue"] != DBNull.Value ? Convert.ToInt32(reader["VoteValue"]) : -1
+                        });
+                    }
                 }
 
-                apiResponse.Parameters["Post"] = post;
+                apiResponse.Parameters["Post"] = post!;
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -210,23 +315,50 @@ namespace api.garagecom.Controllers
         }
 
         [HttpPost("SetPost")]
-        public ApiResponse SetPost(string title, int userId, int postCategoryId, IFormFile file)
+        public async Task<ApiResponse> SetPost(string title, int postCategoryId, IFormFile? file)
         {
+            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, Status)
-                            VALUES (@UserID, @Title, @PostCategoryID, NOW(), 'Active')";
+                var sql = @"
+SELECT Status INTO @StatusID
+FROM Statuses S
+WHERE S.Status = @Status;
+INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID)
+                            VALUES (@UserID, @Title, @PostCategoryID, NOW(), @StatusID);
+                            SELECT LAST_INSERT_ID();";
                 MySqlParameter[] parameters =
                 [
                     new("UserID", userId),
                     new("Title", title),
-                    new("PostCategoryID", postCategoryId)
+                    new("PostCategoryID", postCategoryId),
+                    new("Status", "Active")
                 ];
-                
-                
 
-                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                var apiResponseScalar = DatabaseHelper.ExecuteScalar(sql, parameters);
+                if (apiResponseScalar.Succeeded)
+                {
+                    var postId = Convert.ToInt32(apiResponseScalar.Parameters["Result"]);
+                    if (file != null)
+                    {
+                        var fileName = $"{userId}_{Guid.NewGuid().ToString()}";
+                        var succeeded = await S3Helper.UploadAttachmentAsync(file,fileName, "Images/Posts/");
+                        if (succeeded)
+                        {
+                            sql = @"UPDATE Posts
+                        SET Attachment = @Attachment
+                        WHERE UserID = @UserID AND PostID = @PostID";
+                            parameters = [
+                                new MySqlParameter("Attachment", fileName),
+                                new MySqlParameter("UserID", userId),
+                                new MySqlParameter("PostID", postId)
+                            ];
+                            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                        }
+                    }
+                }
+                apiResponse.Succeeded = true;
             }
             catch (Exception ex)
             {
@@ -237,19 +369,51 @@ namespace api.garagecom.Controllers
             return apiResponse;
         }
 
-        [HttpPost("DeletePost")]
-        public ApiResponse DeletePost(int postId)
+        [HttpPut]
+        public ApiResponse UpdatePost(int postId, string title, string description)
         {
             var apiResponse = new ApiResponse();
             try
             {
                 var sql = @"UPDATE Posts
-                            SET Status = 'InActive',
+                            SET Title = @Title,
+                                Description = @Description,
                                 ModifiedIn = NOW()
                             WHERE PostID = @PostID";
                 MySqlParameter[] parameters =
                 [
-                    new("PostID", postId)
+                    new("PostID", postId),
+                    new("Title", title),
+                    new("Description", description)
+                ];
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+            return apiResponse;
+        }
+
+        [HttpDelete("DeletePost")]
+        public ApiResponse DeletePost(int postId)
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var sql = @"
+SELECT Status INTO @StatusID
+FROM Statuses S
+WHERE S.Status = @Status;
+UPDATE Posts
+                            SET StatusID = @StatusID,
+                                ModifiedIn = NOW()
+                            WHERE PostID = @PostID";
+                MySqlParameter[] parameters =
+                [
+                    new("PostID", postId),
+                    new("Status", "InActive")
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -267,37 +431,54 @@ namespace api.garagecom.Controllers
         #region Comments
 
         [HttpPost("SetComment")]
-        public ApiResponse SetComment(int commentId, int userId, int postId, string text, int parentId)
+        public ApiResponse SetComment(int postId, string text, int parentId)
         {
+            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                if (commentId != -1)
-                {
-                    var sql = @"INSERT INTO Comments (UserID, PostID, Text, CreatedIn, Status, ParentID)
-                            VALUES (@UserID, @PostID, @Text, NOW(), 'Active', @ParentID)";
+                    var sql = @"
+SELECT Status INTO @StatusID
+FROM Statuses S
+WHERE S.Status = @Status;
+INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID, ParentID)
+                            VALUES (@UserID, @PostID, @Text, NOW(), @StatusID, @ParentID)";
                     MySqlParameter[] parameters =
                     [
                         new("UserID", userId),
                         new("PostID", postId),
                         new("Text", text),
-                        new("ParentID", parentId)
+                        new("ParentID", parentId),
+                        new("Status", "Active")
                     ];
                     apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-                }
-                else
-                {
-                    var sql = @"UPDATE Comments
+                
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+        
+        [HttpPost("UpdateComment")]
+        public ApiResponse UpdateComment(int commentId, string text)
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var sql = @"UPDATE Comments
                             SET Text = @Text,
                                 ModifiedIn = NOW()
                             WHERE CommentID = @CommentID";
-                    MySqlParameter[] parameters =
-                    [
-                        new("CommentID", commentId),
-                        new("Text", text)
-                    ];
-                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-                }
+                MySqlParameter[] parameters =
+                [
+                    new("CommentID", commentId),
+                    new("Text", text)
+                ];
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception ex)
             {
@@ -314,13 +495,18 @@ namespace api.garagecom.Controllers
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"UPDATE Comments
-                            SET Status = 'InActive',
+                var sql = @"
+SELECT Status INTO @StatusID
+FROM Statuses S
+WHERE S.Status = @Status;
+UPDATE Comments
+                            SET StatusID = @StatusID,
                                 ModifiedIn = NOW()
                             WHERE CommentID = @CommentID";
                 MySqlParameter[] parameters =
                 [
-                    new("CommentID", commentId)
+                    new("CommentID", commentId),
+                    new("Status", "InActive")
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -341,10 +527,12 @@ namespace api.garagecom.Controllers
             {
                 var comments = new List<Comment>();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, IFNULL(Comments.ModifiedIn, Comments.CreatedIn) AS CreatedIn
+                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostID = @PostID
-                            WHERE Comments.Status = 'Active' AND Posts.Status = 'Active'";
+                            INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
+                            INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
+                            WHERE SC.Status = 'Active' AND SP.Status = 'Active'";
                 MySqlParameter[] parameters =
                 [
                     new("PostID", postId)
@@ -361,7 +549,11 @@ namespace api.garagecom.Controllers
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : ""
+                                : "",
+                            ModifiedIn = reader["ModifiedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            
                         });
                 }
 
@@ -385,10 +577,12 @@ namespace api.garagecom.Controllers
             {
                 var comment = new Comment();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, IFNULL(Comments.ModifiedIn, Comments.CreatedIn) AS CreatedIn, Comments.PostID
+                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID
-                            WHERE Comments.Status = 'Active' AND Posts.Status = 'Active' AND CommentID = @CommentID";
+                            INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
+                            INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
+                            WHERE SC.Status = 'Active' AND SP.Status = 'Active' AND CommentID = @CommentID";
                 MySqlParameter[] parameters =
                 [
                     new("CommentID", commentId)
@@ -405,12 +599,105 @@ namespace api.garagecom.Controllers
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : ""
+                                : "",
+                            ModifiedIn = reader["ModifiedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
                         };
                 }
 
                 apiResponse.Parameters["Comment"] = comment;
                 apiResponse.Succeeded = true;
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+
+        #endregion
+
+        #region Votes
+        
+        [HttpGet("GetVotesByPostId")]
+        public ApiResponse GetVotesByPostId(int postId)
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var votes = new List<Vote>();
+                var sql =
+                    @"SELECT Votes.VoteID, Votes.UserID, Votes.PostID, Votes.CreatedIn AS CreatedIn, Votes.Value
+                            FROM Votes
+                            INNER JOIN Posts ON Votes.PostID = Posts.PostID AND Posts.PostID = @PostID
+                            INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
+                            WHERE Statuses.Status = 'Active'";
+                MySqlParameter[] parameters =
+                [
+                    new("PostID", postId)
+                ];
+                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+                {
+                    while (reader.Read())
+                        votes.Add(new Vote()
+                        {
+                            VoteID = reader["VoteID"] != DBNull.Value ? Convert.ToInt32(reader["VoteID"]) : -1,
+                            UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
+                            PostID = postId,
+                            CreatedIn = reader["CreatedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            Value = reader["Value"] != DBNull.Value ? Convert.ToInt32(reader["Value"]) : -1
+                        });
+                }
+
+                apiResponse.Parameters["Votes"] = votes;
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+        
+        [HttpPost("SetVote")]
+        public ApiResponse SetVote(int voteId, int postId, int value)
+        {
+            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var apiResponse = new ApiResponse();
+            try
+            {
+                if (voteId != -1)
+                {
+                    var sql = @"INSERT INTO Votes (UserID, PostID, CreatedIn, Value)
+                            VALUES (@UserID, @PostID, NOW(), @UpVote)";
+                    MySqlParameter[] parameters =
+                    [
+                        new("UserID", userId),
+                        new("PostID", postId),
+                        new("UpVote", value)
+                    ];
+                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                }
+                else
+                {
+                    var sql = @"UPDATE Votes
+                            SET Value = @Value,
+                                ModifiedIn = NOW()
+                            WHERE VoteID = @VoteID";
+                    MySqlParameter[] parameters =
+                    [
+                        new("VoteID", voteId),
+                        new("Value", value)
+                    ];
+                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                }
             }
             catch (Exception ex)
             {

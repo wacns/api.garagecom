@@ -1,6 +1,9 @@
 ﻿using System.Net.Mail;
 using System.Text.RegularExpressions;
 using api.garagecom.Utils;
+using JWT.Algorithms;
+using JWT.Builder;
+using JWT.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
 
@@ -173,11 +176,62 @@ namespace api.garagecom.Controllers
             }
             
             string token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
+
+            sql = @"INSERT INTO Logins (UserID, LastToken)
+                    VALUES (@UserID, @LastToken)
+                    ON DUPLICATE KEY UPDATE LastToken = @LastToken";
+            parameters = [
+                new("UserID", userId),
+                new("LastToken", token)
+            ];
+            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            if (!apiResponse.Succeeded)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Error Logging In!";
+                return apiResponse;
+            }
             
             apiResponse.Parameters["Token"] = token;
             apiResponse.Succeeded = true;
             
             return apiResponse;
+        }
+
+        [HttpGet("ValidateUser")]
+        public IActionResult ValidateUser(string token)
+        {
+            if (string.IsNullOrEmpty(token))
+            {
+                throw new UnauthorizedAccessException("Token not found");
+            }
+            Dictionary<string, object> payload;
+            try
+            {
+                payload = JwtBuilder.Create()
+                    .WithAlgorithm(new HMACSHA256Algorithm())
+                    .WithSecret(Globals.Secret)
+                    .MustVerifySignature()
+                    .Decode<Dictionary<string, object>>(token);
+            }
+            catch (TokenExpiredException)
+            {
+                throw new UnauthorizedAccessException("Token expired");
+            }
+            catch (SignatureVerificationException)
+            {
+                throw new UnauthorizedAccessException("Token not valid");
+            }
+            catch (Exception)
+            {
+                throw new UnauthorizedAccessException("Token not valid");
+            }
+            if (payload == null)
+            {
+                throw new UnauthorizedAccessException("Token not valid");
+            }
+
+            return Ok();
         }
     }
 }
