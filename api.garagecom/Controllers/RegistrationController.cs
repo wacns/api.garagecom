@@ -13,10 +13,10 @@ namespace api.garagecom.Controllers
     public class RegistrationController : Controller
     {
         [HttpPost("register")]
-        public async Task<ApiResponse> Register(string userName, string email,string password, string gender, string firstName, string lastName, string phoneNumber, IFormFile? avatar = null)
+        public async Task<ApiResponse> Register(string userName, string email,string password, string firstName, string lastName, string phoneNumber, IFormFile? avatar = null)
         {
             ApiResponse apiResponse = new ApiResponse();
-            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(gender) || string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
+            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
             {
                 apiResponse.Succeeded = false;
                 apiResponse.Message = "Please fill all fields";
@@ -78,9 +78,9 @@ namespace api.garagecom.Controllers
                 return apiResponse;
             }
             
-            sql = @"INSERT INTO GeneralInformation (UserName, Email, Password, FirstName, LastName, CreatedIn, Gender, Mobile)
-                    VALUES (@UserName, @Email, @Password, @FirstName, @LastName, NOW(), @Gender, @PhoneNumber);
-                    SELECT LAST_INSERT_ID() Into @UserID;
+            sql = @"INSERT INTO GeneralInformation (UserName, Email, Password, FirstName, LastName, CreatedIn, Mobile)
+                    VALUES (@UserName, @Email, @Password, @FirstName, @LastName, NOW(), @PhoneNumber);
+                    SELECT LAST_INSERT_ID() AS UserID;
                     ";
             parameters = [
                 new MySqlParameter("Email", email),
@@ -88,7 +88,6 @@ namespace api.garagecom.Controllers
                 new MySqlParameter("Password", GeneralHelper.HashEncrypt(password)),
                 new MySqlParameter("FirstName", firstName),
                 new MySqlParameter("LastName", lastName),
-                new MySqlParameter("Gender", gender),
                 new MySqlParameter("PhoneNumber", phoneNumber)
             ];
             
@@ -114,11 +113,21 @@ namespace api.garagecom.Controllers
             }
             
             string token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
+
+            sql = @"INSERT INTO Logins (UserID, LastToken) 
+                    VALUES (@UserID, @LastToken)
+                    ON DUPLICATE KEY UPDATE LastToken = @LastToken;";
+            parameters = [
+                new MySqlParameter("UserID", userId),
+                new MySqlParameter("LastToken", token)
+            ];
+            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            ApiResponse result = new ApiResponse();
+            result.Parameters["Token"] = token;
+            result.Parameters["UserID"] = userId;
+            result.Succeeded = true;
             
-            apiResponse.Parameters["Token"] = token;
-            apiResponse.Succeeded = true;
-            
-            return apiResponse;
+            return result;
         }
         
         [HttpPost("login")]
