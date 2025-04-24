@@ -19,9 +19,15 @@ namespace api.garagecom.Controllers
             if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
             {
                 apiResponse.Succeeded = false;
-                apiResponse.Message = "Please fill all fields";
+                apiResponse.Message = "Please fill all fields1111";
                 return apiResponse;
             }
+
+            try
+            {
+
+            
+            
             
             string userNamePattern = "[^a-zA-Z0-9_.]";
             string phoneNumberPattern = "^[0-9]{8}$";
@@ -128,6 +134,15 @@ namespace api.garagecom.Controllers
             result.Succeeded = true;
             
             return result;
+            
+            }
+            catch (Exception e)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = e.Message;
+                return apiResponse;
+                
+            }
         }
         
         [HttpPost("login")]

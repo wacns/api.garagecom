@@ -24,6 +24,8 @@ public class Post
     public string Attachment { get; set; }
     public string CreatedIn { get; set; }
     public int PostCategoryID { get; set; }
+    
+    public string UserName { get; set; }
     public List<Comment> Comments { get; set; }
     public List<Vote> Votes { get; set; }
 }
@@ -101,9 +103,11 @@ namespace api.garagecom.Controllers
             try
             {
                 var posts = new List<Post>();
-                var sql = @"SELECT PostID, UserID, Posts.Title, Posts.Description, Posts.Attachment, CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
+                var sql = @"SELECT PostID, GeneralInformation.UserName, Posts.UserID, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
                             INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
+                                INNER JOIN GeneralInformation ON GeneralInformation.UserID = Posts.UserID
+                                
                             INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
                             WHERE Posts.PostCategoryID IN (@PostCategoryID, -10) AND Statuses.Status = 'Active'
                             ORDER BY CreatedIn DESC";
@@ -122,6 +126,8 @@ namespace api.garagecom.Controllers
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
+                            
+                            UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             Description = (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
                             Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
