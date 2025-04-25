@@ -17,7 +17,7 @@ namespace api.garagecom.Controllers;
 public class RegistrationController : Controller
 {
     [HttpPost("register")]
-    public async Task<ApiResponse> Register(string userName, string email, string password, string firstName,
+    public ApiResponse Register(string userName, string email, string password, string firstName,
         string lastName, string phoneNumber)
     {
         var apiResponse = new ApiResponse();
