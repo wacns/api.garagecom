@@ -281,4 +281,12 @@ public class RegistrationController : Controller
         apiResponse.Succeeded = true;
         return apiResponse;
     }
+    
+    [HttpGet("GetAttachmentTest")]
+    public async Task<FileResult> GetAttachmentTest(string fileName)
+    {
+        var file = await S3Helper.DownloadAttachmentAsync(fileName, "./");
+        return File(file, "application/octet-stream", fileName);
+    }
+    
 }
