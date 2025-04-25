@@ -285,8 +285,20 @@ public class RegistrationController : Controller
     [HttpGet("GetAttachmentTest")]
     public async Task<FileResult> GetAttachmentTest(string fileName)
     {
-        var file = await S3Helper.DownloadAttachmentAsync(fileName, "./");
+        var file = await S3Helper.DownloadAttachmentAsync(fileName, "");
         return File(file, "application/octet-stream", fileName);
+    }
+
+    [HttpPost("UploadAttachment")]
+    public async Task<ApiResponse> UploadAttachment(IFormFile file)
+    {
+        string filename = Guid.NewGuid().ToString();
+        ApiResponse apiResponse = new ApiResponse
+        {
+            Succeeded = await S3Helper.UploadAttachmentAsync(file, filename, ""),
+            Message = filename
+        };
+        return apiResponse;
     }
     
 }

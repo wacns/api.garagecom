@@ -730,5 +730,19 @@ UPDATE Comments
         }
 
         #endregion
+        
+        
+        [HttpGet("GetAttachmentTest")]
+        public async Task<FileResult> GetAttachmentTest(string fileName)
+        {
+            var file = await S3Helper.DownloadAttachmentAsync(fileName, "");
+            return File(file, "application/octet-stream", fileName);
+        }
+
+        // [HttpPost("SetAttachmentTest")]
+        // public ApiResponse SetAttachmentTest(int postId, IFormFile file)
+        // {
+        //     
+        // }
     }
 }
