@@ -7,6 +7,7 @@ public class Comment
 {
     public int CommentID { get; set; }
     public int UserID { get; set; }
+    public string UserName { get; set; }
     public int ParentID { get; set; }
     public int PostID { get; set; }
     public string CreatedIn { get; set; }
@@ -57,8 +58,6 @@ namespace api.garagecom.Controllers
         [HttpGet("GetPostCategories")]
         public ApiResponse GetPostCategories()
         {
-            string userName = (HttpContext.Items["UserName"] == null ? "" : HttpContext.Items["UserName"]!.ToString())!;
-            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
@@ -219,9 +218,10 @@ namespace api.garagecom.Controllers
             var post = new Post();
             try
             {
-                var sql = @"SELECT PostID, UserID, Posts.Title, Posts.Description, Posts.Attachment, CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
+                var sql = @"SELECT PostID, GeneralInformation.UserID, GeneralInformation.UserName, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
                             INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
+                                INNER JOIN GeneralInformation ON GeneralInformation.UserID = Posts.UserID
                             INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
                             WHERE Statuses.Status = 'Active' AND Posts.PostID = @PostID
                             ORDER BY CreatedIn DESC";
@@ -239,6 +239,7 @@ namespace api.garagecom.Controllers
                                 ? Convert.ToInt32(reader["PostCategoryID"])
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
+                            UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
                             Description = (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
                             Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
@@ -533,8 +534,9 @@ UPDATE Comments
             {
                 var comments = new List<Comment>();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
+                    @"SELECT CommentID, Comments.UserID, ParentID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
                             FROM Comments
+                                INNER JOIN GeneralInformation ON GeneralInformation.UserID = Comments.UserID
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostID = @PostID
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
                             INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
@@ -553,6 +555,7 @@ UPDATE Comments
                             ParentID = reader["ParentID"] != DBNull.Value ? Convert.ToInt32(reader["ParentID"]) : -1,
                             PostID = postId,
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
+                            UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
@@ -583,8 +586,9 @@ UPDATE Comments
             {
                 var comment = new Comment();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
+                    @"SELECT CommentID, Comments.UserID, ParentID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
                             FROM Comments
+                            INNER JOIN GeneralInformation ON GeneralInformation.UserID = Comments.UserID
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
                             INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
@@ -603,6 +607,7 @@ UPDATE Comments
                             CommentID = commentId,
                             PostID = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1,
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
+                            UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
