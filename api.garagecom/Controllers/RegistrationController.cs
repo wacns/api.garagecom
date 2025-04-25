@@ -266,15 +266,16 @@ public class RegistrationController : Controller
     }
 
     [HttpPost("GetTest")]
-    public ApiResponse GetUserInfo( IFormFile file, int x)
+    public ApiResponse GetUserInfo(IFormFile file, int x)
     {
-        ApiResponse apiResponse = new ApiResponse();
+        var apiResponse = new ApiResponse();
         byte[] bytes = [];
         using (var stream = new MemoryStream())
         {
             file.CopyTo(stream);
             bytes = stream.ToArray();
         }
+
         apiResponse.Parameters.Add("File", bytes);
         // apiResponse.Parameters.Add("X", x);
         apiResponse.Succeeded = true;

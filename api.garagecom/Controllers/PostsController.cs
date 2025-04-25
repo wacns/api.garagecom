@@ -32,7 +32,7 @@ public class Post
     public string UserName { get; set; }
     public List<Comment> Comments { get; set; }
     public List<Vote> Votes { get; set; }
-    public bool AllowComments {get; set;}
+    public bool AllowComments { get; set; }
 }
 
 public class Vote
@@ -136,7 +136,8 @@ namespace api.garagecom.Controllers
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
-                            AllowComments = reader["AllowComments"] == DBNull.Value || Convert.ToBoolean(reader["AllowComments"]),
+                            AllowComments = reader["AllowComments"] == DBNull.Value ||
+                                            Convert.ToBoolean(reader["AllowComments"]),
                             PostCategory = new PostCategory
                             {
                                 PostCategoryID = reader["PostCategoryID"] != DBNull.Value
@@ -257,7 +258,8 @@ namespace api.garagecom.Controllers
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
-                            AllowComments = reader["AllowComments"] == DBNull.Value || Convert.ToBoolean(reader["AllowComments"]),
+                            AllowComments = reader["AllowComments"] == DBNull.Value ||
+                                            Convert.ToBoolean(reader["AllowComments"]),
                             PostCategory = new PostCategory
                             {
                                 PostCategoryID = reader["PostCategoryID"] != DBNull.Value
@@ -343,7 +345,7 @@ namespace api.garagecom.Controllers
                 var sql = @"
 SELECT StatusID INTO @StatusID
 FROM Statuses S
-WHERE S.Status = @Status;
+WHERE S.Status = @StatusName;
 INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Description)
                             VALUES (@UserID, @Title, @PostCategoryID, NOW(), @StatusID, @Description);
                             SELECT LAST_INSERT_ID();";
@@ -353,7 +355,7 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Descripti
                     new("Title", title),
                     new("PostCategoryID", postCategoryId),
                     new("Description", description),
-                    new("Status", "Active")
+                    new("StatusName", "Active")
                 ];
 
                 var apiResponseScalar = DatabaseHelper.ExecuteScalar(sql, parameters);

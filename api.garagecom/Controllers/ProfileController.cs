@@ -3,6 +3,7 @@
 using api.garagecom.Filters;
 using api.garagecom.Utils;
 using Microsoft.AspNetCore.Mvc;
+using MySql.Data.MySqlClient;
 
 #endregion
 
@@ -10,7 +11,13 @@ using Microsoft.AspNetCore.Mvc;
 
 public class User
 {
-    
+    public int UserID { get; set; }
+    public string UserName { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public string PhoneNumber { get; set; }
+    public string ProfilePicture { get; set; }
 }
 
 #endregion
@@ -22,24 +29,76 @@ namespace api.garagecom.Controllers
     [Route("api/[controller]")]
     public class ProfileController : Controller
     {
-        [HttpGet()]
+        [HttpGet("GetUserDetails")]
         public ApiResponse GetUserDetails()
         {
-            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
-            ApiResponse apiResponse = new ApiResponse();
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var apiResponse = new ApiResponse();
             try
             {
+                var user = new User();
+                var sql =
+                    @"SELECT UserID, UserName, FirstName, LastName, Email, Mobile, GI.Avatar FROM GeneralInformation GI WHERE UserID = @UserID";
+                MySqlParameter[] parameters =
+                [
+                    new("UserID", userId)
+                ];
+                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+                {
+                    while (reader.Read())
+                        user = new User
+                        {
+                            UserID = Convert.ToInt32(reader["UserID"]),
+                            UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
+                            FirstName = (reader["FirstName"] != DBNull.Value ? reader["FirstName"].ToString() : "")!,
+                            LastName = (reader["LastName"] != DBNull.Value ? reader["LastName"].ToString() : "")!,
+                            Email = (reader["Email"] != DBNull.Value ? reader["Email"].ToString() : "")!,
+                            PhoneNumber =
+                                (reader["PhoneNumber"] != DBNull.Value ? reader["PhoneNumber"].ToString() : "")!,
+                            ProfilePicture = (reader["ProfilePicture"] != DBNull.Value
+                                ? reader["ProfilePicture"].ToString()
+                                : "")!
+                        };
+                }
+
                 apiResponse.Succeeded = true;
-                apiResponse.Parameters.Add("User", new User());
+                apiResponse.Parameters.Add("User", user);
             }
             catch (Exception e)
             {
                 Console.WriteLine(e);
                 throw;
             }
-            
+
+            return apiResponse;
+        }
+
+        [HttpPost("UpdateUserDetails")]
+        public ApiResponse UpdateUserDetails(string firstName, string lastName, string phoneNumber)
+        {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var sql =
+                    @"UPDATE GeneralInformation SET FirstName = @FirstName, LastName = @LastName, Mobile = @PhoneNumber WHERE UserID = @UserID";
+                MySqlParameter[] parameters =
+                [
+                    new("FirstName", firstName),
+                    new("LastName", lastName),
+                    new("PhoneNumber", phoneNumber),
+                    new("UserID", userId)
+                ];
+                DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+
             return apiResponse;
         }
     }
 }
-
