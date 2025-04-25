@@ -1,16 +1,16 @@
-﻿#region
-
-using api.garagecom.Filters;
+﻿using api.garagecom.Filters;
 using api.garagecom.Utils;
 using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
+using System;
+using System.Collections.Generic;
 
-#endregion
+#region Models
 
-public class CarModel
+public class Company
 {
-    public int CarModelID { get; set; }
-    public string ModelName { get; set; }
+    public int CompanyID { get; set; }
+    public string CompanyName { get; set; }
 }
 
 public class CarType
@@ -19,26 +19,38 @@ public class CarType
     public string CarTypeName { get; set; }
 }
 
+public class CarModel
+{
+    public int CarModelID { get; set; }
+    public string ModelName  { get; set; }
+    public Company Company   { get; set; }
+    public CarType CarType   { get; set; }
+}
+
 public class Part
 {
-    public int PartID { get; set; }
+    public int PartID   { get; set; }
     public string PartName { get; set; }
+}
+
+public class CarPart
+{
+    public int CarPartID        { get; set; }
+    public Part Part            { get; set; }
+    public int LifeTimeInterval { get; set; }
+    public DateTime CreatedIn   { get; set; }
+    public DateTime NextDueDate { get; set; }
 }
 
 public class UserCar
 {
-    public int UserCarID { get; set; }
+    public int UserCarID     { get; set; }  // maps to Cars.CarID
+    public int Year          { get; set; }
     public CarModel CarModel { get; set; }
-    public CarType CarType { get; set; }
+    public List<CarPart> Parts { get; set; } = new List<CarPart>();
 }
 
-public class UserPart
-{
-    public int UserCarPartID { get; set; }
-    public Part Part { get; set; }
-    public int UserCarID { get; set; }
-    public int LifeTimeInterval { get; set; } // stored in months
-}
+#endregion
 
 namespace api.garagecom.Controllers
 {
@@ -51,90 +63,118 @@ namespace api.garagecom.Controllers
         [HttpGet("GetCarModels")]
         public ApiResponse GetCarModels()
         {
-            var r = new ApiResponse();
+            var apiResponse = new ApiResponse();
             try
             {
                 var list = new List<CarModel>();
-                var sql = "SELECT CarModelID, ModelName FROM CarModels";
-                using var rd = DatabaseHelper.ExecuteReader(sql, new MySqlParameter[] { });
-                while (rd.Read())
+                var sql = @"
+SELECT cm.CarModelID,
+       cm.ModelName,
+       comp.CompanyID,
+       comp.CompanyName,
+       ct.CarTypeID,
+       ct.CarTypeName
+  FROM CarModels cm
+  INNER JOIN Companies comp ON cm.CompanyID = comp.CompanyID
+  INNER JOIN CarTypes ct     ON cm.CarTypeID  = ct.CarTypeID";
+                MySqlParameter[] parameters = [];
+                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
+                while (reader.Read())
                     list.Add(new CarModel
                     {
-                        CarModelID = Convert.ToInt32(rd["CarModelID"]),
-                        ModelName = rd["ModelName"].ToString()!
+                        CarModelID = reader["CarModelID"] != DBNull.Value ? Convert.ToInt32(reader["CarModelID"]) : -1,
+                        ModelName  = reader["ModelName"]  != DBNull.Value ? reader["ModelName"].ToString()!  : string.Empty,
+                        Company    = new Company
+                        {
+                            CompanyID   = reader["CompanyID"]   != DBNull.Value ? Convert.ToInt32(reader["CompanyID"])   : -1,
+                            CompanyName = reader["CompanyName"] != DBNull.Value ? reader["CompanyName"].ToString()! : string.Empty
+                        },
+                        CarType    = new CarType
+                        {
+                            CarTypeID   = reader["CarTypeID"]   != DBNull.Value ? Convert.ToInt32(reader["CarTypeID"])   : -1,
+                            CarTypeName = reader["CarTypeName"] != DBNull.Value ? reader["CarTypeName"].ToString()! : string.Empty
+                        }
                     });
 
-                r.Parameters["CarModels"] = list;
-                r.Succeeded = true;
+                apiResponse.Parameters["CarModels"] = list;
+                apiResponse.Succeeded = true;
             }
             catch (Exception ex)
             {
-                r.Succeeded = false;
-                r.Message = ex.Message;
+                apiResponse.Succeeded = false;
+                apiResponse.Message   = ex.Message;
             }
 
-            return r;
+            return apiResponse;
         }
 
         [HttpGet("GetCarTypes")]
         public ApiResponse GetCarTypes()
         {
-            var r = new ApiResponse();
+            var apiResponse = new ApiResponse();
             try
             {
                 var list = new List<CarType>();
-                var sql = "SELECT CarTypeID, CarTypeName FROM CarTypes";
-                using var rd = DatabaseHelper.ExecuteReader(sql, []);
-                while (rd.Read())
+                var sql  = @"
+SELECT CarTypeID,
+       CarTypeName
+  FROM CarTypes";
+                MySqlParameter[] parameters = [];
+                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
+                while (reader.Read())
                     list.Add(new CarType
                     {
-                        CarTypeID = Convert.ToInt32(rd["CarTypeID"]),
-                        CarTypeName = rd["CarTypeName"].ToString()!
+                        CarTypeID   = reader["CarTypeID"]   != DBNull.Value ? Convert.ToInt32(reader["CarTypeID"])   : -1,
+                        CarTypeName = reader["CarTypeName"] != DBNull.Value ? reader["CarTypeName"].ToString()! : string.Empty
                     });
 
-                r.Parameters["CarTypes"] = list;
-                r.Succeeded = true;
+                apiResponse.Parameters["CarTypes"] = list;
+                apiResponse.Succeeded = true;
             }
             catch (Exception ex)
             {
-                r.Succeeded = false;
-                r.Message = ex.Message;
+                apiResponse.Succeeded = false;
+                apiResponse.Message   = ex.Message;
             }
 
-            return r;
+            return apiResponse;
         }
 
         [HttpGet("GetParts")]
         public ApiResponse GetParts()
         {
-            var r = new ApiResponse();
+            var apiResponse = new ApiResponse();
             try
             {
                 var list = new List<Part>();
-                var sql = "SELECT PartID, PartName FROM Parts";
-                using var rd = DatabaseHelper.ExecuteReader(sql, new MySqlParameter[] { });
-                while (rd.Read())
+                var sql  = @"
+SELECT PartID,
+       PartName
+  FROM Parts";
+                MySqlParameter[] parameters = [];
+                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
+                while (reader.Read())
                     list.Add(new Part
                     {
-                        PartID = Convert.ToInt32(rd["PartID"]),
-                        PartName = rd["PartName"].ToString()!
+                        PartID   = reader["PartID"]   != DBNull.Value ? Convert.ToInt32(reader["PartID"])   : -1,
+                        PartName = reader["PartName"] != DBNull.Value ? reader["PartName"].ToString()! : string.Empty
                     });
 
-                r.Parameters["Parts"] = list;
-                r.Succeeded = true;
+                apiResponse.Parameters["Parts"] = list;
+                apiResponse.Succeeded = true;
             }
             catch (Exception ex)
             {
-                r.Succeeded = false;
-                r.Message = ex.Message;
+                apiResponse.Succeeded = false;
+                apiResponse.Message   = ex.Message;
             }
 
-            return r;
+            return apiResponse;
         }
 
         #endregion
 
-        #region UserCars
+        #region Cars
 
         [HttpGet("GetUserCars")]
         public ApiResponse GetUserCars()
@@ -143,41 +183,94 @@ namespace api.garagecom.Controllers
             try
             {
                 var userId = HttpContext.Items["UserID"] as int? ?? -1;
-                var list = new List<UserCar>();
+                var list   = new List<UserCar>();
+
                 var sql = @"
-SELECT uc.UserCarID,
+SELECT c.CarID,
+       c.Year,
        cm.CarModelID, cm.ModelName,
-       ct.CarTypeID, ct.CarTypeName
-  FROM UserCars uc
-  JOIN Cars c       ON uc.CarID     = c.CarID
+       ct.CarTypeID, ct.CarTypeName,
+       comp.CompanyID, comp.CompanyName
+  FROM Cars c
   JOIN CarModels cm ON c.CarModelID = cm.CarModelID
-  JOIN CarTypes ct  ON c.CarTypeID  = ct.CarTypeID
-  JOIN Statuses s   ON uc.StatusID  = s.StatusID
+  JOIN CarTypes  ct ON cm.CarTypeID  = ct.CarTypeID
+  JOIN Companies comp ON cm.CompanyID = comp.CompanyID
+  JOIN Statuses s   ON c.StatusID    = s.StatusID
  WHERE s.Status = @st
-   AND uc.UserID = @uid
-ORDER BY uc.CreatedIn DESC";
-                var ps = new[]
-                {
-                    new MySqlParameter("st", "Active"),
+   AND c.UserID = @uid";
+                MySqlParameter[] ps = {
+                    new MySqlParameter("st",  "Active"),
                     new MySqlParameter("uid", userId)
                 };
 
-                using var rd = DatabaseHelper.ExecuteReader(sql, ps);
-                while (rd.Read())
+                using var reader = DatabaseHelper.ExecuteReader(sql, ps);
+                while (reader.Read())
+                {
                     list.Add(new UserCar
                     {
-                        UserCarID = Convert.ToInt32(rd["UserCarID"]),
-                        CarModel = new CarModel
+                        UserCarID = reader["CarID"] != DBNull.Value ? Convert.ToInt32(reader["CarID"]) : -1,
+                        Year      = reader["Year"]  != DBNull.Value ? Convert.ToInt32(reader["Year"])  : 0,
+                        CarModel  = new CarModel
                         {
-                            CarModelID = Convert.ToInt32(rd["CarModelID"]),
-                            ModelName = rd["ModelName"].ToString()!
-                        },
-                        CarType = new CarType
-                        {
-                            CarTypeID = Convert.ToInt32(rd["CarTypeID"]),
-                            CarTypeName = rd["CarTypeName"].ToString()!
+                            CarModelID = reader["CarModelID"] != DBNull.Value ? Convert.ToInt32(reader["CarModelID"]) : -1,
+                            ModelName  = reader["ModelName"]  != DBNull.Value ? reader["ModelName"].ToString()! : string.Empty,
+                            Company    = new Company
+                            {
+                                CompanyID   = reader["CompanyID"]   != DBNull.Value ? Convert.ToInt32(reader["CompanyID"])   : -1,
+                                CompanyName = reader["CompanyName"] != DBNull.Value ? reader["CompanyName"].ToString()! : string.Empty
+                            },
+                            CarType    = new CarType
+                            {
+                                CarTypeID   = reader["CarTypeID"]   != DBNull.Value ? Convert.ToInt32(reader["CarTypeID"])   : -1,
+                                CarTypeName = reader["CarTypeName"] != DBNull.Value ? reader["CarTypeName"].ToString()! : string.Empty
+                            }
                         }
                     });
+                }
+
+                var partSql = @"
+SELECT cp.CarPartID,
+       cp.PartID,
+       p.PartName,
+       cp.LifeTimeInterval,
+       cp.CreatedIn,
+       DATE_ADD(
+         COALESCE(
+           (
+             SELECT DATE_ADD(r.CreatedIn, INTERVAL 1 DAY)
+             FROM CarPartsRenewal r
+             WHERE r.CarPartID = cp.CarPartID
+             ORDER BY r.CreatedIn DESC
+             LIMIT 1
+           ),
+           cp.CreatedIn
+         ),
+         INTERVAL cp.LifeTimeInterval MONTH
+       ) AS NextDueDate
+  FROM CarParts cp
+  JOIN Parts p ON cp.PartID = p.PartID
+ WHERE cp.CarID = @cid";
+
+                foreach (var car in list)
+                {
+                    using var reader2 = DatabaseHelper.ExecuteReader(partSql,
+                        [new MySqlParameter("cid", car.UserCarID)]);
+                    while (reader2.Read())
+                    {
+                        car.Parts.Add(new CarPart
+                        {
+                            CarPartID        = reader2["CarPartID"]        != DBNull.Value ? Convert.ToInt32(reader2["CarPartID"]) : -1,
+                            Part              = new Part
+                            {
+                                PartID   = reader2["PartID"]   != DBNull.Value ? Convert.ToInt32(reader2["PartID"])   : -1,
+                                PartName = reader2["PartName"] != DBNull.Value ? reader2["PartName"].ToString()! : string.Empty
+                            },
+                            LifeTimeInterval = reader2["LifeTimeInterval"] != DBNull.Value ? Convert.ToInt32(reader2["LifeTimeInterval"]) : 0,
+                            CreatedIn        = reader2["CreatedIn"] != DBNull.Value ? Convert.ToDateTime(reader2["CreatedIn"]) : DateTime.MinValue,
+                            NextDueDate      = reader2["NextDueDate"] != DBNull.Value ? Convert.ToDateTime(reader2["NextDueDate"]) : DateTime.MinValue
+                        });
+                    }
+                }
 
                 r.Parameters["UserCars"] = list;
                 r.Succeeded = true;
@@ -185,273 +278,32 @@ ORDER BY uc.CreatedIn DESC";
             catch (Exception ex)
             {
                 r.Succeeded = false;
-                r.Message = ex.Message;
+                r.Message   = ex.Message;
             }
-
-            return r;
-        }
-
-        [HttpGet("GetUserCar")]
-        public ApiResponse GetUserCar(int userCarId)
-        {
-            var r = new ApiResponse();
-            try
-            {
-                var userId = HttpContext.Items["UserID"] as int? ?? -1;
-                var sql = @"
-SELECT uc.UserCarID,
-       cm.CarModelID, cm.ModelName,
-       ct.CarTypeID, ct.CarTypeName
-  FROM UserCars uc
-  JOIN Cars c       ON uc.CarID     = c.CarID
-  JOIN CarModels cm ON c.CarModelID = cm.CarModelID
-  JOIN CarTypes ct  ON c.CarTypeID  = ct.CarTypeID
-  JOIN Statuses s   ON uc.StatusID  = s.StatusID
- WHERE s.Status     = @st
-   AND uc.UserID    = @uid
-   AND uc.UserCarID = @ucid";
-                var ps = new[]
-                {
-                    new MySqlParameter("st", "Active"),
-                    new MySqlParameter("uid", userId),
-                    new MySqlParameter("ucid", userCarId)
-                };
-
-                var car = new UserCar();
-                using var rd = DatabaseHelper.ExecuteReader(sql, ps);
-                if (rd.Read())
-                    car = new UserCar
-                    {
-                        UserCarID = Convert.ToInt32(rd["UserCarID"]),
-                        CarModel = new CarModel
-                        {
-                            CarModelID = Convert.ToInt32(rd["CarModelID"]),
-                            ModelName = rd["ModelName"].ToString()!
-                        },
-                        CarType = new CarType
-                        {
-                            CarTypeID = Convert.ToInt32(rd["CarTypeID"]),
-                            CarTypeName = rd["CarTypeName"].ToString()!
-                        }
-                    };
-
-                r.Parameters["UserCar"] = car;
-                r.Succeeded = true;
-            }
-            catch (Exception ex)
-            {
-                r.Succeeded = false;
-                r.Message = ex.Message;
-            }
-
-            return r;
-        }
-
-        [HttpPost("SetUserCar")]
-        public ApiResponse SetUserCar(int carModelId, int carTypeId, int year)
-        {
-            var r = new ApiResponse();
-            try
-            {
-                var userId = HttpContext.Items["UserID"] as int? ?? -1;
-
-                // 1) create Cars row
-                var sql1 = @"
-INSERT INTO Cars (CarModelID, CarTypeID, `Year`)
-VALUES (@cm, @ct, @yr);
-SELECT LAST_INSERT_ID();";
-                var p1 = new[]
-                {
-                    new MySqlParameter("cm", carModelId),
-                    new MySqlParameter("ct", carTypeId),
-                    new MySqlParameter("yr", year)
-                };
-                var sc = DatabaseHelper.ExecuteScalar(sql1, p1);
-
-                if (sc.Succeeded)
-                {
-                    var carId = Convert.ToInt32(sc.Parameters["Result"]);
-
-                    // 2) link into UserCars
-                    var sql2 = @"
-SELECT Status INTO @sid
-  FROM Statuses
- WHERE Status = @st;
-
-INSERT INTO UserCars (UserID, CarID, CreatedIn, StatusID)
-VALUES (@uid, @cid, NOW(), @sid);";
-                    var p2 = new[]
-                    {
-                        new MySqlParameter("st", "Active"),
-                        new MySqlParameter("uid", userId),
-                        new MySqlParameter("cid", carId)
-                    };
-                    r = DatabaseHelper.ExecuteNonQuery(sql2, p2);
-                }
-
-                r.Succeeded = true;
-            }
-            catch (Exception ex)
-            {
-                r.Succeeded = false;
-                r.Message = ex.Message;
-            }
-
-            return r;
-        }
-
-        [HttpDelete("DeleteUserCar")]
-        public ApiResponse DeleteUserCar(int userCarId)
-        {
-            var r = new ApiResponse();
-            try
-            {
-                var sql = @"
-SELECT Status INTO @sid
-  FROM Statuses
- WHERE Status = @st;
-UPDATE UserCars
-   SET StatusID   = @sid,
-       ModifiedIn = NOW()
- WHERE UserCarID = @ucid";
-                var ps = new[]
-                {
-                    new MySqlParameter("st", "InActive"),
-                    new MySqlParameter("ucid", userCarId)
-                };
-                r = DatabaseHelper.ExecuteNonQuery(sql, ps);
-            }
-            catch (Exception ex)
-            {
-                r.Succeeded = false;
-                r.Message = ex.Message;
-            }
-
             return r;
         }
 
         #endregion
+        
+        #region Parts
 
-        #region UserCarParts
-
-        [HttpPost("SetUserCarPart")]
-        public ApiResponse SetUserCarPart(int userCarId, int partId, int lifeTimeInterval)
+        [HttpPost("RenewCarPart")]
+        public ApiResponse RenewCarPart(int carPartId)
         {
             var r = new ApiResponse();
             try
             {
-                var sql = @"
-INSERT INTO UserCarParts (PartID, UserCarID, LifeTimeInterval)
-VALUES (@pid, @ucid, @lti)";
-                var ps = new[]
-                {
-                    new MySqlParameter("pid", partId),
-                    new MySqlParameter("ucid", userCarId),
-                    new MySqlParameter("lti", lifeTimeInterval)
-                };
+                var sql = @"INSERT INTO CarPartsRenewal (CarPartID, CreatedIn) VALUES (@cpid, NOW())";
+                var ps  = new[] { new MySqlParameter("cpid", carPartId) };
                 r = DatabaseHelper.ExecuteNonQuery(sql, ps);
             }
             catch (Exception ex)
             {
                 r.Succeeded = false;
-                r.Message = ex.Message;
+                r.Message   = ex.Message;
             }
-
             return r;
         }
-
-        [HttpGet("GetUserCarParts")]
-        public ApiResponse GetUserCarParts(int userCarId)
-        {
-            var r = new ApiResponse();
-            try
-            {
-                var list = new List<UserPart>();
-                var sql = @"
-SELECT ucp.UserCarPartID,
-       ucp.PartID, p.PartName,
-       ucp.UserCarID,
-       ucp.LifeTimeInterval
-  FROM UserCarParts ucp
-  JOIN Parts p ON ucp.PartID = p.PartID
- WHERE ucp.UserCarID = @ucid";
-                var ps = new[]
-                {
-                    new MySqlParameter("ucid", userCarId)
-                };
-
-                using var rd = DatabaseHelper.ExecuteReader(sql, ps);
-                while (rd.Read())
-                    list.Add(new UserPart
-                    {
-                        UserCarPartID = Convert.ToInt32(rd["UserCarPartID"]),
-                        Part = new Part
-                        {
-                            PartID = Convert.ToInt32(rd["PartID"]),
-                            PartName = rd["PartName"].ToString()!
-                        },
-                        UserCarID = Convert.ToInt32(rd["UserCarID"]),
-                        LifeTimeInterval = Convert.ToInt32(rd["LifeTimeInterval"])
-                    });
-
-                r.Parameters["UserCarParts"] = list;
-                r.Succeeded = true;
-            }
-            catch (Exception ex)
-            {
-                r.Succeeded = false;
-                r.Message = ex.Message;
-            }
-
-            return r;
-        }
-
-        [HttpGet("GetUserCarPart")]
-        public ApiResponse GetUserCarPart(int userCarPartId)
-        {
-            var r = new ApiResponse();
-            try
-            {
-                var sql = @"
-SELECT ucp.UserCarPartID,
-       ucp.PartID, p.PartName,
-       ucp.UserCarID,
-       ucp.LifeTimeInterval
-  FROM UserCarParts ucp
-  JOIN Parts p ON ucp.PartID = p.PartID
- WHERE ucp.UserCarPartID = @ucpid";
-                var ps = new[]
-                {
-                    new MySqlParameter("ucpid", userCarPartId)
-                };
-
-                var part = new UserPart();
-                using var rd = DatabaseHelper.ExecuteReader(sql, ps);
-                if (rd.Read())
-                    part = new UserPart
-                    {
-                        UserCarPartID = Convert.ToInt32(rd["UserCarPartID"]),
-                        Part = new Part
-                        {
-                            PartID = Convert.ToInt32(rd["PartID"]),
-                            PartName = rd["PartName"].ToString()!
-                        },
-                        UserCarID = Convert.ToInt32(rd["UserCarID"]),
-                        LifeTimeInterval = Convert.ToInt32(rd["LifeTimeInterval"])
-                    };
-
-                r.Parameters["UserCarPart"] = part;
-                r.Succeeded = true;
-            }
-            catch (Exception ex)
-            {
-                r.Succeeded = false;
-                r.Message = ex.Message;
-            }
-
-            return r;
-        }
-
         #endregion
     }
 }
