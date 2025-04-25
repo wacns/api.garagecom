@@ -13,12 +13,6 @@ public class Brand
     public string BrandName { get; set; }
 }
 
-public class CarType
-{
-    public int CarTypeID { get; set; }
-    public string CarTypeName { get; set; }
-}
-
 public class CarModel
 {
     public int CarModelID { get; set; }
@@ -43,7 +37,7 @@ public class CarPart
 
 public class UserCar
 {
-    public int UserCarID     { get; set; }  // maps to Cars.CarID
+    public int CarID     { get; set; }  // maps to Cars.CarID
     public int Year          { get; set; }
     public CarModel CarModel { get; set; }
     public List<CarPart> Parts { get; set; } = new List<CarPart>();
@@ -88,38 +82,6 @@ SELECT cm.CarModelID,
                     });
 
                 apiResponse.Parameters["CarModels"] = list;
-                apiResponse.Succeeded = true;
-            }
-            catch (Exception ex)
-            {
-                apiResponse.Succeeded = false;
-                apiResponse.Message   = ex.Message;
-            }
-
-            return apiResponse;
-        }
-
-        [HttpGet("GetCarTypes")]
-        public ApiResponse GetCarTypes()
-        {
-            var apiResponse = new ApiResponse();
-            try
-            {
-                var list = new List<CarType>();
-                var sql  = @"
-SELECT CarTypeID,
-       CarTypeName
-  FROM CarTypes";
-                MySqlParameter[] parameters = [];
-                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
-                while (reader.Read())
-                    list.Add(new CarType
-                    {
-                        CarTypeID   = reader["CarTypeID"]   != DBNull.Value ? Convert.ToInt32(reader["CarTypeID"])   : -1,
-                        CarTypeName = reader["CarTypeName"] != DBNull.Value ? reader["CarTypeName"].ToString()! : string.Empty
-                    });
-
-                apiResponse.Parameters["CarTypes"] = list;
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -197,7 +159,7 @@ SELECT c.CarID,
                 {
                     list.Add(new UserCar
                     {
-                        UserCarID = reader["CarID"] != DBNull.Value ? Convert.ToInt32(reader["CarID"]) : -1,
+                        CarID = reader["CarID"] != DBNull.Value ? Convert.ToInt32(reader["CarID"]) : -1,
                         Year      = reader["Year"]  != DBNull.Value ? Convert.ToInt32(reader["Year"])  : 0,
                         CarModel  = new CarModel
                         {
@@ -217,7 +179,16 @@ SELECT cp.CarPartID,
        cp.PartID,
        p.PartName,
        cp.LifeTimeInterval,
-       cp.CreatedIn,
+       COALESCE(
+           (
+             SELECT MAX(r.CreatedIn)
+             FROM CarPartsRenewal r
+             WHERE r.CarPartID = cp.CarPartID
+             ORDER BY r.CreatedIn DESC
+             LIMIT 1
+           ),
+           cp.CreatedIn
+         ) AS CreatedIn,
        DATE_ADD(
          COALESCE(
            (
@@ -238,7 +209,7 @@ SELECT cp.CarPartID,
                 foreach (var car in list)
                 {
                     using var reader2 = DatabaseHelper.ExecuteReader(partSql,
-                        [new MySqlParameter("cid", car.UserCarID)]);
+                        [new MySqlParameter("cid", car.CarID)]);
                     while (reader2.Read())
                     {
                         car.Parts.Add(new CarPart
@@ -271,6 +242,29 @@ SELECT cp.CarPartID,
         
         #region Parts
 
+        [HttpPost("SetCarPart")]
+        public ApiResponse SetCarPart(int carId, int partId, int lifeTimeInterval)
+        {
+            var r = new ApiResponse();
+            try
+            {
+                var sql = @"INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn) VALUES (@cid, @pid, @lti, NOW())";
+                MySqlParameter[] parameters =
+                [
+                    new MySqlParameter("cid", carId),
+                    new MySqlParameter("pid", partId),
+                    new MySqlParameter("lti", lifeTimeInterval)
+                ];
+                r = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            }
+            catch (Exception ex)
+            {
+                r.Succeeded = false;
+                r.Message   = ex.Message;
+            }
+            return r;
+        }
+        
         [HttpPost("RenewCarPart")]
         public ApiResponse RenewCarPart(int carPartId)
         {

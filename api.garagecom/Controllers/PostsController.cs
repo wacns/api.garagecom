@@ -29,10 +29,10 @@ public class Post
     public string Attachment { get; set; }
     public string CreatedIn { get; set; }
     public int PostCategoryID { get; set; }
-
     public string UserName { get; set; }
     public List<Comment> Comments { get; set; }
     public List<Vote> Votes { get; set; }
+    public bool AllowComments {get; set;}
 }
 
 public class Vote
@@ -105,7 +105,7 @@ namespace api.garagecom.Controllers
             {
                 var posts = new List<Post>();
                 var sql =
-                    @"SELECT PostID, GeneralInformation.UserName, Posts.UserID, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
+                    @"SELECT PostID, GeneralInformation.UserName, Posts.AllowComments,Posts.UserID, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
                             INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
                                 INNER JOIN GeneralInformation ON GeneralInformation.UserID = Posts.UserID
@@ -136,6 +136,7 @@ namespace api.garagecom.Controllers
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
+                            AllowComments = reader["AllowComments"] == DBNull.Value || Convert.ToBoolean(reader["AllowComments"]),
                             PostCategory = new PostCategory
                             {
                                 PostCategoryID = reader["PostCategoryID"] != DBNull.Value
@@ -227,7 +228,7 @@ namespace api.garagecom.Controllers
             try
             {
                 var sql =
-                    @"SELECT PostID, GeneralInformation.UserID, GeneralInformation.UserName, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
+                    @"SELECT PostID, GeneralInformation.UserID, GeneralInformation.UserName, Posts.AllowComments,Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
                             INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
                                 INNER JOIN GeneralInformation ON GeneralInformation.UserID = Posts.UserID
@@ -256,6 +257,7 @@ namespace api.garagecom.Controllers
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
+                            AllowComments = reader["AllowComments"] == DBNull.Value || Convert.ToBoolean(reader["AllowComments"]),
                             PostCategory = new PostCategory
                             {
                                 PostCategoryID = reader["PostCategoryID"] != DBNull.Value
@@ -332,7 +334,7 @@ namespace api.garagecom.Controllers
         }
 
         [HttpPost("SetPost")]
-        public async Task<ApiResponse> SetPost(string title, int postCategoryId, IFormFile? file)
+        public async Task<ApiResponse> SetPost(string title, int postCategoryId, string description)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
@@ -342,14 +344,15 @@ namespace api.garagecom.Controllers
 SELECT Status INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
-INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID)
-                            VALUES (@UserID, @Title, @PostCategoryID, NOW(), @StatusID);
+INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Description)
+                            VALUES (@UserID, @Title, @PostCategoryID, NOW(), @StatusID, @Description);
                             SELECT LAST_INSERT_ID();";
                 MySqlParameter[] parameters =
                 [
                     new("UserID", userId),
                     new("Title", title),
                     new("PostCategoryID", postCategoryId),
+                    new("Description", description),
                     new("Status", "Active")
                 ];
 
@@ -357,24 +360,24 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID)
                 if (apiResponseScalar.Succeeded)
                 {
                     var postId = Convert.ToInt32(apiResponseScalar.Parameters["Result"]);
-                    if (file != null)
-                    {
-                        var fileName = $"{userId}_{Guid.NewGuid().ToString()}";
-                        var succeeded = await S3Helper.UploadAttachmentAsync(file, fileName, "Images/Posts/");
-                        if (succeeded)
-                        {
-                            sql = @"UPDATE Posts
-                        SET Attachment = @Attachment
-                        WHERE UserID = @UserID AND PostID = @PostID";
-                            parameters =
-                            [
-                                new MySqlParameter("Attachment", fileName),
-                                new MySqlParameter("UserID", userId),
-                                new MySqlParameter("PostID", postId)
-                            ];
-                            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-                        }
-                    }
+                    // if (file != null)
+                    // {
+                    //     var fileName = $"{userId}_{Guid.NewGuid().ToString()}";
+                    //     var succeeded = await S3Helper.UploadAttachmentAsync(file, fileName, "Images/Posts/");
+                    //     if (succeeded)
+                    //     {
+                    //         sql = @"UPDATE Posts
+                    //     SET Attachment = @Attachment
+                    //     WHERE UserID = @UserID AND PostID = @PostID";
+                    //         parameters =
+                    //         [
+                    //             new MySqlParameter("Attachment", fileName),
+                    //             new MySqlParameter("UserID", userId),
+                    //             new MySqlParameter("PostID", postId)
+                    //         ];
+                    //         apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                    //     }
+                    // }
                 }
 
                 apiResponse.Succeeded = true;

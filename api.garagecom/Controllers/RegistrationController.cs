@@ -264,4 +264,20 @@ public class RegistrationController : Controller
 
         return Ok();
     }
+
+    [HttpPost("GetTest")]
+    public ApiResponse GetUserInfo( IFormFile file)
+    {
+        ApiResponse apiResponse = new ApiResponse();
+        byte[] bytes = [];
+        using (var stream = new MemoryStream())
+        {
+            file.CopyTo(stream);
+            bytes = stream.ToArray();
+        }
+        apiResponse.Parameters.Add("File", bytes);
+        // apiResponse.Parameters.Add("X", x);
+        apiResponse.Succeeded = true;
+        return apiResponse;
+    }
 }
