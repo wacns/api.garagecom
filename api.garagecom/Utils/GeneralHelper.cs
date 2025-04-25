@@ -9,7 +9,7 @@ public static class GeneralHelper
     {
         input ??= "";
 
-        byte[] passwordByte = Encoding.ASCII.GetBytes(input);
+        var passwordByte = Encoding.ASCII.GetBytes(input);
         using (var mD5CryptoServiceProvider = new MD5CryptoServiceProvider())
         {
             var passwordHash = mD5CryptoServiceProvider.ComputeHash(passwordByte);

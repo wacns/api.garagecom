@@ -25,7 +25,7 @@ public class Post
     public string Attachment { get; set; }
     public string CreatedIn { get; set; }
     public int PostCategoryID { get; set; }
-    
+
     public string UserName { get; set; }
     public List<Comment> Comments { get; set; }
     public List<Vote> Votes { get; set; }
@@ -68,7 +68,6 @@ namespace api.garagecom.Controllers
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
                     while (reader.Read())
-                    {
                         postCategories.Add(new PostCategory
                         {
                             PostCategoryID = reader["PostCategoryID"] != DBNull.Value
@@ -76,7 +75,6 @@ namespace api.garagecom.Controllers
                                 : -1,
                             Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!
                         });
-                    }
                 }
 
                 apiResponse.Parameters["PostCategories"] = postCategories;
@@ -102,7 +100,8 @@ namespace api.garagecom.Controllers
             try
             {
                 var posts = new List<Post>();
-                var sql = @"SELECT PostID, GeneralInformation.UserName, Posts.UserID, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
+                var sql =
+                    @"SELECT PostID, GeneralInformation.UserName, Posts.UserID, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
                             INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
                                 INNER JOIN GeneralInformation ON GeneralInformation.UserID = Posts.UserID
@@ -125,26 +124,30 @@ namespace api.garagecom.Controllers
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
-                            
+
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
-                            Description = (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                            Description =
+                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
                             Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
-                            PostCategory = new PostCategory()
+                            PostCategory = new PostCategory
                             {
                                 PostCategoryID = reader["PostCategoryID"] != DBNull.Value
                                     ? Convert.ToInt32(reader["PostCategoryID"])
                                     : -1,
-                                Title = (reader["CategoryTitle"] != DBNull.Value ? reader["CategoryTitle"].ToString() : "")!
+                                Title = (reader["CategoryTitle"] != DBNull.Value
+                                    ? reader["CategoryTitle"].ToString()
+                                    : "")!
                             },
                             Comments = [],
                             Votes = []
                         });
                 }
 
-                sql = @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
+                sql =
+                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
@@ -171,8 +174,9 @@ namespace api.garagecom.Controllers
                         });
                     }
                 }
-                
-                sql = @"SELECT Votes.VoteID, Votes.UserID, Votes.PostID, Votes.CreatedIn AS CreatedIn, Votes.Value AS VoteValue, Votes.ModifiedIn
+
+                sql =
+                    @"SELECT Votes.VoteID, Votes.UserID, Votes.PostID, Votes.CreatedIn AS CreatedIn, Votes.Value AS VoteValue, Votes.ModifiedIn
                             FROM Votes
                             INNER JOIN Posts ON Votes.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
                             INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
@@ -218,7 +222,8 @@ namespace api.garagecom.Controllers
             var post = new Post();
             try
             {
-                var sql = @"SELECT PostID, GeneralInformation.UserID, GeneralInformation.UserName, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
+                var sql =
+                    @"SELECT PostID, GeneralInformation.UserID, GeneralInformation.UserName, Posts.Title, Posts.Description, Posts.Attachment, Posts.CreatedIn, Posts.PostCategoryID, PostCategories.Title AS CategoryTitle
                             FROM Posts
                             INNER JOIN PostCategories ON PostCategories.PostCategoryID = Posts.PostCategoryID
                                 INNER JOIN GeneralInformation ON GeneralInformation.UserID = Posts.UserID
@@ -241,24 +246,28 @@ namespace api.garagecom.Controllers
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
-                            Description = (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                            Description =
+                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
                             Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : "",
-                            PostCategory = new PostCategory()
+                            PostCategory = new PostCategory
                             {
                                 PostCategoryID = reader["PostCategoryID"] != DBNull.Value
                                     ? Convert.ToInt32(reader["PostCategoryID"])
                                     : -1,
-                                Title = (reader["CategoryTitle"] != DBNull.Value ? reader["CategoryTitle"].ToString() : "")!
+                                Title = (reader["CategoryTitle"] != DBNull.Value
+                                    ? reader["CategoryTitle"].ToString()
+                                    : "")!
                             },
                             Comments = [],
                             Votes = []
                         };
                 }
 
-                sql = @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
+                sql =
+                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
@@ -267,7 +276,6 @@ namespace api.garagecom.Controllers
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
                     while (reader.Read())
-                    {
                         post?.Comments.Add(new Comment
                         {
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
@@ -281,10 +289,10 @@ namespace api.garagecom.Controllers
                                 ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
                                 : ""
                         });
-                    }
                 }
-                
-                sql = @"SELECT Votes.VoteID, Votes.UserID, Votes.PostID, Votes.CreatedIn AS CreatedIn, Votes.Value AS VoteValue, Votes.ModifiedIn
+
+                sql =
+                    @"SELECT Votes.VoteID, Votes.UserID, Votes.PostID, Votes.CreatedIn AS CreatedIn, Votes.Value AS VoteValue, Votes.ModifiedIn
                             FROM Votes
                             INNER JOIN Posts ON Votes.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
                             INNER JOIN Statuses ON Statuses.StatusID = Posts.StatusID
@@ -292,7 +300,6 @@ namespace api.garagecom.Controllers
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
                     while (reader.Read())
-                    {
                         post?.Votes.Add(new Vote
                         {
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
@@ -306,7 +313,6 @@ namespace api.garagecom.Controllers
                             VoteID = reader["VoteID"] != DBNull.Value ? Convert.ToInt32(reader["VoteID"]) : -1,
                             Value = reader["VoteValue"] != DBNull.Value ? Convert.ToInt32(reader["VoteValue"]) : -1
                         });
-                    }
                 }
 
                 apiResponse.Parameters["Post"] = post!;
@@ -324,7 +330,7 @@ namespace api.garagecom.Controllers
         [HttpPost("SetPost")]
         public async Task<ApiResponse> SetPost(string title, int postCategoryId, IFormFile? file)
         {
-            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
@@ -350,13 +356,14 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID)
                     if (file != null)
                     {
                         var fileName = $"{userId}_{Guid.NewGuid().ToString()}";
-                        var succeeded = await S3Helper.UploadAttachmentAsync(file,fileName, "Images/Posts/");
+                        var succeeded = await S3Helper.UploadAttachmentAsync(file, fileName, "Images/Posts/");
                         if (succeeded)
                         {
                             sql = @"UPDATE Posts
                         SET Attachment = @Attachment
                         WHERE UserID = @UserID AND PostID = @PostID";
-                            parameters = [
+                            parameters =
+                            [
                                 new MySqlParameter("Attachment", fileName),
                                 new MySqlParameter("UserID", userId),
                                 new MySqlParameter("PostID", postId)
@@ -365,6 +372,7 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID)
                         }
                     }
                 }
+
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -400,6 +408,7 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID)
                 apiResponse.Succeeded = false;
                 apiResponse.Message = ex.Message;
             }
+
             return apiResponse;
         }
 
@@ -440,26 +449,25 @@ UPDATE Posts
         [HttpPost("SetComment")]
         public ApiResponse SetComment(int postId, string text, int parentId)
         {
-            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                    var sql = @"
+                var sql = @"
 SELECT Status INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
 INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID, ParentID)
                             VALUES (@UserID, @PostID, @Text, NOW(), @StatusID, @ParentID)";
-                    MySqlParameter[] parameters =
-                    [
-                        new("UserID", userId),
-                        new("PostID", postId),
-                        new("Text", text),
-                        new("ParentID", parentId),
-                        new("Status", "Active")
-                    ];
-                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-                
+                MySqlParameter[] parameters =
+                [
+                    new("UserID", userId),
+                    new("PostID", postId),
+                    new("Text", text),
+                    new("ParentID", parentId),
+                    new("Status", "Active")
+                ];
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception ex)
             {
@@ -469,7 +477,7 @@ INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID, ParentID)
 
             return apiResponse;
         }
-        
+
         [HttpPost("UpdateComment")]
         public ApiResponse UpdateComment(int commentId, string text)
         {
@@ -561,8 +569,7 @@ UPDATE Comments
                                 : "",
                             ModifiedIn = reader["ModifiedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : "",
-                            
+                                : ""
                         });
                 }
 
@@ -613,7 +620,7 @@ UPDATE Comments
                                 : "",
                             ModifiedIn = reader["ModifiedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : "",
+                                : ""
                         };
                 }
 
@@ -632,7 +639,7 @@ UPDATE Comments
         #endregion
 
         #region Votes
-        
+
         [HttpGet("GetVotesByPostId")]
         public ApiResponse GetVotesByPostId(int postId)
         {
@@ -653,7 +660,7 @@ UPDATE Comments
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
                     while (reader.Read())
-                        votes.Add(new Vote()
+                        votes.Add(new Vote
                         {
                             VoteID = reader["VoteID"] != DBNull.Value ? Convert.ToInt32(reader["VoteID"]) : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
@@ -676,11 +683,11 @@ UPDATE Comments
 
             return apiResponse;
         }
-        
+
         [HttpPost("SetVote")]
         public ApiResponse SetVote(int voteId, int postId, int value)
         {
-            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {

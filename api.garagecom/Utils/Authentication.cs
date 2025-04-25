@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
-using JWT.Algorithms;
+﻿using JWT.Algorithms;
 using JWT.Builder;
 using JWT.Exceptions;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using MySql.Data.MySqlClient;
 
 namespace api.garagecom.Utils;
@@ -20,10 +20,8 @@ public abstract class Authentication
             httpContext.HttpContext.Items["UserID"] = -999;
             string authentication;
 
-            if ((httpContext.ActionArguments.TryGetValue("token", out var tok) && tok!.ToString() != "") || (httpContext.ActionArguments.TryGetValue("key", out var key) && key!.ToString() != ""))
-            {
-                continue;
-            }
+            if ((httpContext.ActionArguments.TryGetValue("token", out var tok) && tok!.ToString() != "") ||
+                (httpContext.ActionArguments.TryGetValue("key", out var key) && key!.ToString() != "")) continue;
 
             try
             {
@@ -36,6 +34,7 @@ public abstract class Authentication
                     httpContext.Result = new EmptyResult();
                     throw new UnauthorizedAccessException("Token not found");
                 }
+
                 payload = JwtBuilder.Create()
                     .WithAlgorithm(new HMACSHA256Algorithm())
                     .WithSecret(Globals.Secret)
@@ -62,11 +61,11 @@ public abstract class Authentication
                 throw new UnauthorizedAccessException("User ID not found in token payload");
             }
 
-            int userId = Convert.ToInt32(userIdObj.ToString());
-            string userName = payload["UserName"].ToString()!;
-            string email = payload["Email"].ToString()!;
+            var userId = Convert.ToInt32(userIdObj.ToString());
+            var userName = payload["UserName"].ToString()!;
+            var email = payload["Email"].ToString()!;
 
-            string sql = "SELECT LastToken FROM Logins WHERE UserID = @UserID";
+            var sql = "SELECT LastToken FROM Logins WHERE UserID = @UserID";
             MySqlParameter[] parameters = [new("UserID", userId)];
 
             var scalarResult = DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"];
@@ -76,7 +75,8 @@ public abstract class Authentication
                 httpContext.Result = new EmptyResult();
                 throw new UnauthorizedAccessException("User ID not found in token payload");
             }
-            string? lastSessionId = string.IsNullOrEmpty(scalarResult.ToString()) ? null : scalarResult.ToString();
+
+            var lastSessionId = string.IsNullOrEmpty(scalarResult.ToString()) ? null : scalarResult.ToString();
 
             if (lastSessionId == null || lastSessionId != authentication)
             {

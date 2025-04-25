@@ -362,4 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-./api.garagecom/.env
+*.env
+/api.garagecom/.env
+
+.idea
