@@ -7,10 +7,10 @@ using System.Collections.Generic;
 
 #region Models
 
-public class Company
+public class Brand
 {
-    public int CompanyID { get; set; }
-    public string CompanyName { get; set; }
+    public int BrandID { get; set; }
+    public string BrandName { get; set; }
 }
 
 public class CarType
@@ -23,8 +23,7 @@ public class CarModel
 {
     public int CarModelID { get; set; }
     public string ModelName  { get; set; }
-    public Company Company   { get; set; }
-    public CarType CarType   { get; set; }
+    public Brand Brand   { get; set; }
 }
 
 public class Part
@@ -70,13 +69,10 @@ namespace api.garagecom.Controllers
                 var sql = @"
 SELECT cm.CarModelID,
        cm.ModelName,
-       comp.CompanyID,
-       comp.CompanyName,
-       ct.CarTypeID,
-       ct.CarTypeName
+       comp.BrandID,
+       comp.BrandName
   FROM CarModels cm
-  INNER JOIN Companies comp ON cm.CompanyID = comp.CompanyID
-  INNER JOIN CarTypes ct     ON cm.CarTypeID  = ct.CarTypeID";
+  INNER JOIN Garagecom.Brands comp ON cm.BrandID = comp.BrandID";
                 MySqlParameter[] parameters = [];
                 using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
                 while (reader.Read())
@@ -84,16 +80,11 @@ SELECT cm.CarModelID,
                     {
                         CarModelID = reader["CarModelID"] != DBNull.Value ? Convert.ToInt32(reader["CarModelID"]) : -1,
                         ModelName  = reader["ModelName"]  != DBNull.Value ? reader["ModelName"].ToString()!  : string.Empty,
-                        Company    = new Company
+                        Brand    = new Brand
                         {
-                            CompanyID   = reader["CompanyID"]   != DBNull.Value ? Convert.ToInt32(reader["CompanyID"])   : -1,
-                            CompanyName = reader["CompanyName"] != DBNull.Value ? reader["CompanyName"].ToString()! : string.Empty
+                            BrandID   = reader["BrandID"]   != DBNull.Value ? Convert.ToInt32(reader["BrandID"])   : -1,
+                            BrandName = reader["BrandName"] != DBNull.Value ? reader["BrandName"].ToString()! : string.Empty
                         },
-                        CarType    = new CarType
-                        {
-                            CarTypeID   = reader["CarTypeID"]   != DBNull.Value ? Convert.ToInt32(reader["CarTypeID"])   : -1,
-                            CarTypeName = reader["CarTypeName"] != DBNull.Value ? reader["CarTypeName"].ToString()! : string.Empty
-                        }
                     });
 
                 apiResponse.Parameters["CarModels"] = list;
@@ -189,12 +180,10 @@ SELECT PartID,
 SELECT c.CarID,
        c.Year,
        cm.CarModelID, cm.ModelName,
-       ct.CarTypeID, ct.CarTypeName,
-       comp.CompanyID, comp.CompanyName
+       comp.BrandID, comp.BrandName
   FROM Cars c
   JOIN CarModels cm ON c.CarModelID = cm.CarModelID
-  JOIN CarTypes  ct ON cm.CarTypeID  = ct.CarTypeID
-  JOIN Companies comp ON cm.CompanyID = comp.CompanyID
+  JOIN Brands comp ON cm.BrandID = comp.BrandID
   JOIN Statuses s   ON c.StatusID    = s.StatusID
  WHERE s.Status = @st
    AND c.UserID = @uid";
@@ -214,15 +203,10 @@ SELECT c.CarID,
                         {
                             CarModelID = reader["CarModelID"] != DBNull.Value ? Convert.ToInt32(reader["CarModelID"]) : -1,
                             ModelName  = reader["ModelName"]  != DBNull.Value ? reader["ModelName"].ToString()! : string.Empty,
-                            Company    = new Company
+                            Brand    = new Brand
                             {
-                                CompanyID   = reader["CompanyID"]   != DBNull.Value ? Convert.ToInt32(reader["CompanyID"])   : -1,
-                                CompanyName = reader["CompanyName"] != DBNull.Value ? reader["CompanyName"].ToString()! : string.Empty
-                            },
-                            CarType    = new CarType
-                            {
-                                CarTypeID   = reader["CarTypeID"]   != DBNull.Value ? Convert.ToInt32(reader["CarTypeID"])   : -1,
-                                CarTypeName = reader["CarTypeName"] != DBNull.Value ? reader["CarTypeName"].ToString()! : string.Empty
+                                BrandID   = reader["BrandID"]   != DBNull.Value ? Convert.ToInt32(reader["BrandID"])   : -1,
+                                BrandName = reader["BrandName"] != DBNull.Value ? reader["BrandName"].ToString()! : string.Empty
                             }
                         }
                     });

@@ -25,7 +25,7 @@ public class RegistrationController : Controller
             string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
         {
             apiResponse.Succeeded = false;
-            apiResponse.Message = "Please fill all fields1111";
+            apiResponse.Message = "Please fill all fields";
             return apiResponse;
         }
 
@@ -125,8 +125,8 @@ public class RegistrationController : Controller
 
             var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
 
-            sql = @"INSERT INTO Logins (UserID, LastToken) 
-                    VALUES (@UserID, @LastToken)
+            sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn) 
+                    VALUES (@UserID, @LastToken, NOW())
                     ON DUPLICATE KEY UPDATE LastToken = @LastToken;";
             parameters =
             [
@@ -211,8 +211,8 @@ public class RegistrationController : Controller
 
         var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
 
-        sql = @"INSERT INTO Logins (UserID, LastToken)
-                    VALUES (@UserID, @LastToken)
+        sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn)
+                    VALUES (@UserID, @LastToken, NOW())
                     ON DUPLICATE KEY UPDATE LastToken = @LastToken";
         parameters =
         [

@@ -69,7 +69,7 @@ public abstract class Authentication
             var userName = payload["UserName"].ToString()!;
             var email = payload["Email"].ToString()!;
 
-            var sql = "SELECT LastToken FROM Logins WHERE UserID = @UserID";
+            var sql = "SELECT LastToken FROM Logins WHERE UserID = @UserID ORDER BY CreatedIn DESC LIMIT 1";
             MySqlParameter[] parameters = [new("UserID", userId)];
 
             var scalarResult = DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"];
