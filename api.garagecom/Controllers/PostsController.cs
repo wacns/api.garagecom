@@ -12,7 +12,6 @@ public class Comment
     public int CommentID { get; set; }
     public int UserID { get; set; }
     public string UserName { get; set; }
-    public int ParentID { get; set; }
     public int PostID { get; set; }
     public string CreatedIn { get; set; }
     public string Text { get; set; }
@@ -153,7 +152,7 @@ namespace api.garagecom.Controllers
                 }
 
                 sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
+                    @"SELECT CommentID, Comments.UserID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
@@ -168,7 +167,6 @@ namespace api.garagecom.Controllers
                         post?.Comments.Add(new Comment
                         {
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            ParentID = reader["ParentID"] != DBNull.Value ? Convert.ToInt32(reader["ParentID"]) : -1,
                             PostID = postId,
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
@@ -275,7 +273,7 @@ namespace api.garagecom.Controllers
                 }
 
                 sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
+                    @"SELECT CommentID, Comments.UserID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
                             FROM Comments
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
@@ -287,7 +285,6 @@ namespace api.garagecom.Controllers
                         post?.Comments.Add(new Comment
                         {
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            ParentID = reader["ParentID"] != DBNull.Value ? Convert.ToInt32(reader["ParentID"]) : -1,
                             PostID = postId,
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
@@ -456,7 +453,7 @@ UPDATE Posts
         #region Comments
 
         [HttpPost("SetComment")]
-        public ApiResponse SetComment(int postId, string text, int parentId)
+        public ApiResponse SetComment(int postId, string text)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
@@ -466,14 +463,13 @@ UPDATE Posts
 SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
-INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID, ParentID)
-                            VALUES (@UserID, @PostID, @Text, NOW(), @StatusID, @ParentID)";
+INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID)
+                            VALUES (@UserID, @PostID, @Text, NOW(), @StatusID)";
                 MySqlParameter[] parameters =
                 [
                     new("UserID", userId),
                     new("PostID", postId),
                     new("Text", text),
-                    new("ParentID", parentId),
                     new("Status", "Active")
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
@@ -551,7 +547,7 @@ UPDATE Comments
             {
                 var comments = new List<Comment>();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
+                    @"SELECT CommentID, Comments.UserID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
                             FROM Comments
                                 INNER JOIN GeneralInformation ON GeneralInformation.UserID = Comments.UserID
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostID = @PostID
@@ -569,7 +565,6 @@ UPDATE Comments
                         {
                             CommentID = reader["CommentID"] != DBNull.Value ? Convert.ToInt32(reader["CommentID"]) : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            ParentID = reader["ParentID"] != DBNull.Value ? Convert.ToInt32(reader["ParentID"]) : -1,
                             PostID = postId,
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
@@ -602,7 +597,7 @@ UPDATE Comments
             {
                 var comment = new Comment();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, ParentID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
+                    @"SELECT CommentID, Comments.UserID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
                             FROM Comments
                             INNER JOIN GeneralInformation ON GeneralInformation.UserID = Comments.UserID
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID
@@ -619,7 +614,6 @@ UPDATE Comments
                         comment = new Comment
                         {
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            ParentID = reader["ParentID"] != DBNull.Value ? Convert.ToInt32(reader["ParentID"]) : -1,
                             CommentID = commentId,
                             PostID = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1,
                             Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
