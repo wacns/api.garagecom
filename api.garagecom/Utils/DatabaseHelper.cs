@@ -1,7 +1,11 @@
-﻿using System.Data;
+﻿#region
+
+using System.Data;
 using System.Runtime.CompilerServices;
 using System.Web;
 using MySql.Data.MySqlClient;
+
+#endregion
 
 namespace api.garagecom.Utils;
 

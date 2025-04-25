@@ -1,4 +1,6 @@
-﻿using System.Net.Mail;
+﻿#region
+
+using System.Net.Mail;
 using System.Text.RegularExpressions;
 using api.garagecom.Utils;
 using JWT.Algorithms;
@@ -6,6 +8,8 @@ using JWT.Builder;
 using JWT.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
+
+#endregion
 
 namespace api.garagecom.Controllers;
 
@@ -130,10 +134,15 @@ public class RegistrationController : Controller
                 new MySqlParameter("LastToken", token)
             ];
             apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-            var result = new ApiResponse();
-            result.Parameters["Token"] = token;
-            result.Parameters["UserID"] = userId;
-            result.Succeeded = true;
+            var result = new ApiResponse
+            {
+                Parameters =
+                {
+                    ["Token"] = token,
+                    ["UserID"] = userId
+                },
+                Succeeded = true
+            };
 
             return result;
         }

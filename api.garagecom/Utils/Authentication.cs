@@ -1,9 +1,13 @@
-﻿using JWT.Algorithms;
+﻿#region
+
+using JWT.Algorithms;
 using JWT.Builder;
 using JWT.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using MySql.Data.MySqlClient;
+
+#endregion
 
 namespace api.garagecom.Utils;
 

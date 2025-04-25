@@ -1,6 +1,10 @@
-﻿using api.garagecom.Utils;
+﻿#region
+
+using api.garagecom.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+
+#endregion
 
 namespace api.garagecom.Filters;
 

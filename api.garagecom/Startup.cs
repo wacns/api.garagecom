@@ -1,6 +1,10 @@
-﻿using Microsoft.AspNetCore.Http.Features;
+﻿#region
+
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
+
+#endregion
 
 namespace api.garagecom;
 
@@ -61,6 +65,8 @@ public class Startup
             endpoints.MapControllerRoute("Registration", "Registration/{controller=Home}/{action=Index}/{id?}");
             endpoints.MapControllerRoute("Dashboard", "Dashboard/{controller=Home}/{action=Index}/{id?}");
             endpoints.MapControllerRoute("Posts", "Posts/{controller=Home}/{action=Index}/{id?}");
+            endpoints.MapControllerRoute("Cars", "Cars/{controller=Home}/{action=Index}/{id?}");
+            endpoints.MapControllerRoute("Profile", "Profile/{controller=Home}/{action=Index}/{id?}");
             endpoints.MapControllerRoute("default", "{controller=Default}/{action=Index}/{id?}");
         });
     }

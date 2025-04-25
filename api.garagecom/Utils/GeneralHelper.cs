@@ -1,5 +1,9 @@
-﻿using System.Security.Cryptography;
+﻿#region
+
+using System.Security.Cryptography;
 using System.Text;
+
+#endregion
 
 namespace api.garagecom.Utils;
 

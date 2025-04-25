@@ -1,7 +1,11 @@
-﻿using api.garagecom.Filters;
+﻿#region
+
+using api.garagecom.Filters;
 using api.garagecom.Utils;
 using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
+
+#endregion
 
 namespace api.garagecom.Controllers;
 

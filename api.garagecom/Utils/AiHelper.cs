@@ -1,4 +1,6 @@
-﻿using System.Net.Http.Headers;
+﻿#region
+
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,6 +9,8 @@ using Newtonsoft.Json.Linq;
 using OpenAI;
 using OpenAI.Chat;
 using JsonSerializer = System.Text.Json.JsonSerializer;
+
+#endregion
 
 namespace api.garagecom.Utils;
 // ─── Models ────────────────────────────────────────────────────────────────

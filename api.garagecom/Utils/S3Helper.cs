@@ -1,7 +1,11 @@
-﻿using System.Net;
+﻿#region
+
+using System.Net;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
+
+#endregion
 
 namespace api.garagecom.Utils;
 
