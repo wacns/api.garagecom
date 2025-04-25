@@ -341,7 +341,7 @@ namespace api.garagecom.Controllers
             try
             {
                 var sql = @"
-SELECT Status INTO @StatusID
+SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
 INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Description)
@@ -426,7 +426,7 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Descripti
             try
             {
                 var sql = @"
-SELECT Status INTO @StatusID
+SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
 UPDATE Posts
@@ -461,7 +461,7 @@ UPDATE Posts
             try
             {
                 var sql = @"
-SELECT Status INTO @StatusID
+SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
 INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID, ParentID)
@@ -518,7 +518,7 @@ INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID, ParentID)
             try
             {
                 var sql = @"
-SELECT Status INTO @StatusID
+SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
 UPDATE Comments

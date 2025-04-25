@@ -18,7 +18,7 @@ public class RegistrationController : Controller
 {
     [HttpPost("register")]
     public ApiResponse Register(string userName, string email, string password, string firstName,
-        string lastName, string phoneNumber)
+        string lastName, string phoneNumber, IFormFile file)
     {
         var apiResponse = new ApiResponse();
         if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) ||
@@ -266,7 +266,7 @@ public class RegistrationController : Controller
     }
 
     [HttpPost("GetTest")]
-    public ApiResponse GetUserInfo( IFormFile file)
+    public ApiResponse GetUserInfo( IFormFile file, int x)
     {
         ApiResponse apiResponse = new ApiResponse();
         byte[] bytes = [];
