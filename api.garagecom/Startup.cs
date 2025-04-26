@@ -1,6 +1,8 @@
 ﻿#region
 
 using api.garagecom.Middlewares;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
@@ -41,6 +43,16 @@ public class Startup
             options.MinimumSameSitePolicy = SameSiteMode.None;
             options.Secure = CookieSecurePolicy.Always;
         });
+        
+        var credPath = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS_PATH")!;
+        if (string.IsNullOrEmpty(credPath))
+            throw new InvalidOperationException(
+                "FIREBASE_CREDENTIALS_PATH not set in environment or .env file.");
+        FirebaseApp.Create(new AppOptions()
+        {
+            Credential = GoogleCredential.FromFile(credPath)
+        });
+        services.AddSingleton(FirebaseApp.DefaultInstance);
     }
 
     [Obsolete]

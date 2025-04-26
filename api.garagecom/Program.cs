@@ -9,9 +9,9 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        var host = CreateHostBuilder(args);
         DotEnv.Load();
-        host.Build().Run();
+        var host = CreateHostBuilder(args).Build();
+        host.Run();
     }
 
     private static IHostBuilder CreateHostBuilder(string[] args)

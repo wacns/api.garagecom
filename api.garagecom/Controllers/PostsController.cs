@@ -473,6 +473,44 @@ INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID)
                     new("Status", "Active")
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                var task = new Task(() =>
+                {
+                    sql = @"
+                        SELECT UserID
+                        INTO @PostUserID
+                        FROM Posts P
+                        WHERE P.PostID = @PostID
+                        ORDER BY P.CreatedIn DESC
+                        LIMIT 1;
+                        SELECT DeviceToken
+                        FROM Logins L
+                        WHERE L.UserID = @PostUserID
+                        ORDER BY L.CreatedIn DESC
+                        LIMIT 1;";
+                    int postUserId = -1;
+                    string deviceToken = "";
+                    parameters =
+                    [
+                        new MySqlParameter("PostID", postId)
+                    ];
+                    ApiResponse apiResponseScalar = DatabaseHelper.ExecuteScalar(sql, parameters);
+                    if (apiResponseScalar.Succeeded)
+                    {
+                        postUserId = Convert.ToInt32(apiResponseScalar.Parameters["PostUserID"]);
+                        deviceToken = apiResponseScalar.Parameters["DeviceToken"].ToString();
+                    }
+                    if (postUserId != -1 && deviceToken != "")
+                    {
+                        var notification = new NotificationRequest
+                        {
+                            Title = "New Comment On Your Post",
+                            Body = text,
+                            
+                        };
+                        var notificationResponse = NotificationHelper.SendNotification(notification);
+                    }
+                });
+                task.Start();
             }
             catch (Exception ex)
             {

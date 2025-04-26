@@ -18,11 +18,12 @@ public class RegistrationController : Controller
 {
     [HttpPost("register")]
     public ApiResponse Register(string userName, string email, string password, string firstName,
-        string lastName, string phoneNumber, IFormFile file)
+        string lastName, string phoneNumber, string deviceToken)
     {
         var apiResponse = new ApiResponse();
         if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) ||
-            string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
+            string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8 ||
+            string.IsNullOrEmpty(deviceToken))
         {
             apiResponse.Succeeded = false;
             apiResponse.Message = "Please fill all fields";
@@ -106,32 +107,15 @@ public class RegistrationController : Controller
 
             var userId = Convert.ToInt32(apiResponse.Parameters["Result"].ToString());
 
-            // if (avatar != null)
-            // {
-            //     var fileName = $"{userId}_{Guid.NewGuid().ToString()}";
-            //     var succeeded = await S3Helper.UploadAttachmentAsync(avatar,fileName, "Images/Logos/");
-            //     if (succeeded)
-            //     {
-            //         sql = @"UPDATE GeneralInformation
-            //         SET Avatar = @Avatar
-            //         WHERE UserID = @UserID";
-            //         parameters = [
-            //             new MySqlParameter("Avatar", fileName),
-            //             new MySqlParameter("UserID", userId)
-            //         ];
-            //         apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-            //     }
-            // }
-
             var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
 
-            sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn) 
-                    VALUES (@UserID, @LastToken, NOW())
-                    ON DUPLICATE KEY UPDATE LastToken = @LastToken;";
+            sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn, DeviceToken) 
+                    VALUES (@UserID, @LastToken, NOW(), @DeviceToken);";
             parameters =
             [
                 new MySqlParameter("UserID", userId),
-                new MySqlParameter("LastToken", token)
+                new MySqlParameter("LastToken", token),
+                new MySqlParameter("DeviceToken", deviceToken)
             ];
             apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             var result = new ApiResponse
@@ -155,7 +139,7 @@ public class RegistrationController : Controller
     }
 
     [HttpPost("login")]
-    public ApiResponse Login(string userName, string password)
+    public ApiResponse Login(string userName, string password, string deviceToken)
     {
         var apiResponse = new ApiResponse();
         if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(password))
@@ -211,13 +195,13 @@ public class RegistrationController : Controller
 
         var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
 
-        sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn)
-                    VALUES (@UserID, @LastToken, NOW())
-                    ON DUPLICATE KEY UPDATE LastToken = @LastToken";
+        sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn, DeviceToken)
+                    VALUES (@UserID, @LastToken, NOW(), @DeviceToken)";
         parameters =
         [
             new MySqlParameter("UserID", userId),
-            new MySqlParameter("LastToken", token)
+            new MySqlParameter("LastToken", token),
+            new MySqlParameter("DeviceToken", deviceToken)
         ];
         apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
         if (!apiResponse.Succeeded)
@@ -265,41 +249,4 @@ public class RegistrationController : Controller
 
         return Ok();
     }
-
-    [HttpPost("GetTest")]
-    public ApiResponse GetUserInfo(IFormFile file, int x)
-    {
-        var apiResponse = new ApiResponse();
-        byte[] bytes = [];
-        using (var stream = new MemoryStream())
-        {
-            file.CopyTo(stream);
-            bytes = stream.ToArray();
-        }
-
-        apiResponse.Parameters.Add("File", bytes);
-        // apiResponse.Parameters.Add("X", x);
-        apiResponse.Succeeded = true;
-        return apiResponse;
-    }
-    
-    [HttpGet("GetAttachmentTest")]
-    public async Task<FileResult> GetAttachmentTest(string fileName)
-    {
-        var file = await S3Helper.DownloadAttachmentAsync(fileName, "");
-        return File(file, "application/octet-stream", fileName);
-    }
-
-    [HttpPost("UploadAttachment")]
-    public async Task<ApiResponse> UploadAttachment(IFormFile file)
-    {
-        string filename = Guid.NewGuid().ToString();
-        ApiResponse apiResponse = new ApiResponse
-        {
-            Succeeded = await S3Helper.UploadAttachmentAsync(file, filename, ""),
-            Message = filename
-        };
-        return apiResponse;
-    }
-    
 }

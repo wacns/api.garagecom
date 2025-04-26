@@ -289,6 +289,28 @@ SELECT cp.CarPartID,
             return apiResponse;
         }
 
+        [HttpPost("DeleteCar")]
+        public ApiResponse DeleteCar(int carId)
+        {
+            ApiResponse apiResponse = new ApiResponse();
+            try
+            {
+                var sql = @"UPDATE Cars SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarID = @cid";
+                MySqlParameter[] parameters =
+                {
+                    new("st", "Inactive"),
+                    new("cid", carId)
+                };
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            }
+            catch (Exception e)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = e.Message;
+            }
+            return apiResponse;
+        }
+
         #endregion
 
         #region Parts

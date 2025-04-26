@@ -366,3 +366,5 @@ FodyWeavers.xsd
 /api.garagecom/.env
 
 .idea
+
+api.garagecom/Credentials
