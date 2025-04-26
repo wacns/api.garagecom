@@ -270,14 +270,16 @@ SELECT cp.CarPartID,
             try
             {
                 var sql =
-                    @"INSERT INTO Cars (CarModelID, UserID, Nickname, Kilos, Year, CreatedIn) VALUES (@cmid, @uid, @nick, @kilos, @y, NOW())";
+                    @"SELECT StatusID INTO @StatusID
+FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID, Nickname, Kilos, Year, CreatedIn, StatusID) VALUES (@cmid, @uid, @nick, @kilos, @y, NOW(), @StatusID)";
                 MySqlParameter[] parameters =
                 {
                     new("cmid", carModelId),
                     new("uid", userId),
                     new("nick", nickname),
                     new("kilos", kilos),
-                    new("y", year)
+                    new("y", year),
+                    new("StatusName", "Active")
                 };
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
