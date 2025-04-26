@@ -41,8 +41,8 @@ public class Car
 {
     public int CarID { get; set; } // maps to Cars.CarID
     public int Year { get; set; }
-    public string Nickname { get; set; }
-    public double Kilos { get; set; }
+    public string? Nickname { get; set; }
+    public double? Kilos { get; set; }
     public CarModel CarModel { get; set; }
     public List<CarPart> Parts { get; set; } = new();
 }
@@ -186,7 +186,7 @@ SELECT c.CarID,
                             }
                         },
                         Nickname = reader["Nickname"] != DBNull.Value ? reader["Nickname"].ToString()! : string.Empty,
-                        Kilos = reader["Kilos"] != DBNull.Value ? Convert.ToDouble(reader["Kilos"]) : 0
+                        Kilos = reader["Kilos"] != DBNull.Value ? Convert.ToDouble(reader["Kilos"]) : null
                     });
 
                 var partSql = @"
