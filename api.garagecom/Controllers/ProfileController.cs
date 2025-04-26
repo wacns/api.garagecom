@@ -55,7 +55,7 @@ namespace api.garagecom.Controllers
                             LastName = (reader["LastName"] != DBNull.Value ? reader["LastName"].ToString() : "")!,
                             Email = (reader["Email"] != DBNull.Value ? reader["Email"].ToString() : "")!,
                             PhoneNumber =
-                                (reader["PhoneNumber"] != DBNull.Value ? reader["PhoneNumber"].ToString() : "")!,
+                                (reader["Mobile"] != DBNull.Value ? reader["Mobile"].ToString() : "")!,
                             ProfilePicture = (reader["ProfilePicture"] != DBNull.Value
                                 ? reader["ProfilePicture"].ToString()
                                 : "")!,
@@ -68,8 +68,8 @@ namespace api.garagecom.Controllers
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                throw;
+                apiResponse.Message = e.Message;
+                apiResponse.Succeeded = false;
             }
 
             return apiResponse;
@@ -96,8 +96,8 @@ namespace api.garagecom.Controllers
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                throw;
+                apiResponse.Message = e.Message;
+                apiResponse.Succeeded = false;
             }
 
             return apiResponse;
