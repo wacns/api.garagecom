@@ -263,7 +263,7 @@ SELECT cp.CarPartID,
         }
 
         [HttpPost("SetCar")]
-        public ApiResponse SetCar(int carModelId, string nickname, double kilos, int year)
+        public ApiResponse SetCar(int carModelId, string? nickname, double? kilos, int year)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             ApiResponse apiResponse = new ApiResponse();
