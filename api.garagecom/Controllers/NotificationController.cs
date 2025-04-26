@@ -7,7 +7,7 @@ namespace api.garagecom.Controllers;
 public class NotificationController : Controller
 {
     [HttpPost("Send")]
-    public async Task<ApiResponse> SendNotification([FromBody] NotificationRequest req)
+    public async Task<ApiResponse> SendNotification(NotificationRequest req)
     {
         var apiResponse = new ApiResponse();
         try
