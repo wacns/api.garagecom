@@ -13,6 +13,13 @@ namespace api.garagecom.Controllers;
 [Route("api/[controller]")]
 public class DashboardController : Controller
 {
+    [HttpGet("GetDashboardSignAttachment")]
+    public async Task<FileResult> GetDashboardSignAttachment(string fileName)
+    {
+        var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/DashboardSigns/");
+        return File(file, "application/octet-stream", fileName);
+    }
+    
     [HttpPost("GetDashboardSigns")]
     public async Task<ApiResponse> GetDashboardSigns([FromForm] IFormFile file)
     {

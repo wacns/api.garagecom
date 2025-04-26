@@ -732,17 +732,40 @@ UPDATE Comments
         #endregion
         
         
-        [HttpGet("GetAttachmentTest")]
-        public async Task<FileResult> GetAttachmentTest(string fileName)
+        [HttpGet("GetPostAttachment")]
+        public async Task<FileResult> GetPostAttachment(string fileName)
         {
-            var file = await S3Helper.DownloadAttachmentAsync(fileName, "");
+            var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Posts/");
             return File(file, "application/octet-stream", fileName);
         }
 
-        // [HttpPost("SetAttachmentTest")]
-        // public ApiResponse SetAttachmentTest(int postId, IFormFile file)
-        // {
-        //     
-        // }
+        [HttpPost("SetPostAttachment")]
+        public ApiResponse SetPostAttachment(int postId, IFormFile file)
+        {
+            var attachmentName = $"{postId}_{Guid.NewGuid().ToString()}";
+            Task task = new Task(async void () =>
+            {
+                bool status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Posts/");
+                if (!status) return;
+                var sql = @"UPDATE Posts
+                            SET Attachment = @Attachment
+                            WHERE PostID = @PostID";
+                MySqlParameter[] parameters =
+                [
+                    new("Attachment", attachmentName),
+                    new("PostID", postId)
+                ];
+                DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            });
+            task.Start();
+            return new ApiResponse
+            {
+                Succeeded = true,
+                Parameters =
+                {
+                    ["AttachmentName"] = attachmentName
+                }
+            };
+        }
     }
 }
