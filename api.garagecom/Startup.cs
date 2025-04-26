@@ -78,6 +78,7 @@ public class Startup
         {
             endpoints.MapControllers();
             endpoints.MapControllerRoute("Registration", "Registration/{controller=Home}/{action=Index}/{id?}");
+            endpoints.MapControllerRoute("Notifications", "Notifications/{controller=Home}/{action=Index}/{id?}");
             endpoints.MapControllerRoute("Dashboard", "Dashboard/{controller=Home}/{action=Index}/{id?}");
             endpoints.MapControllerRoute("Posts", "Posts/{controller=Home}/{action=Index}/{id?}");
             endpoints.MapControllerRoute("Cars", "Cars/{controller=Home}/{action=Index}/{id?}");
