@@ -1,5 +1,6 @@
 ﻿#region
 
+using api.garagecom.Middlewares;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
@@ -52,6 +53,8 @@ public class Startup
         });
         app.UseRouting();
         app.UseCors("CorsPolicy");
+        
+        app.UseRequestResponseLogging();
 
         app.UseForwardedHeaders(new ForwardedHeadersOptions
         {
