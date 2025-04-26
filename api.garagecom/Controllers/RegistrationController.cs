@@ -228,6 +228,7 @@ public class RegistrationController : Controller
         }
 
         apiResponse.Parameters["Token"] = token;
+        apiResponse.Parameters["UserID"] = userId;
         apiResponse.Succeeded = true;
 
         return apiResponse;

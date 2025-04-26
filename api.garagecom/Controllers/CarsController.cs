@@ -37,10 +37,12 @@ public class CarPart
     public DateTime NextDueDate { get; set; }
 }
 
-public class UserCar
+public class Car
 {
     public int CarID { get; set; } // maps to Cars.CarID
     public int Year { get; set; }
+    public string Nickname { get; set; }
+    public double Kilos { get; set; }
     public CarModel CarModel { get; set; }
     public List<CarPart> Parts { get; set; } = new();
 }
@@ -53,6 +55,85 @@ namespace api.garagecom.Controllers
     [Route("api/[controller]")]
     public class CarsController : Controller
     {
+        #region ComboBox
+
+        [HttpGet("GetCarModels")]
+        public ApiResponse GetCarModels()
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var list = new List<CarModel>();
+                var sql = @"
+SELECT cm.CarModelID,
+       cm.ModelName,
+       comp.BrandID,
+       comp.BrandName
+  FROM CarModels cm
+  INNER JOIN Garagecom.Brands comp ON cm.BrandID = comp.BrandID";
+                MySqlParameter[] parameters = [];
+                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
+                while (reader.Read())
+                    list.Add(new CarModel
+                    {
+                        CarModelID = reader["CarModelID"] != DBNull.Value ? Convert.ToInt32(reader["CarModelID"]) : -1,
+                        ModelName =
+                            reader["ModelName"] != DBNull.Value ? reader["ModelName"].ToString()! : string.Empty,
+                        Brand = new Brand
+                        {
+                            BrandID = reader["BrandID"] != DBNull.Value ? Convert.ToInt32(reader["BrandID"]) : -1,
+                            BrandName = reader["BrandName"] != DBNull.Value
+                                ? reader["BrandName"].ToString()!
+                                : string.Empty
+                        }
+                    });
+
+                apiResponse.Parameters["CarModels"] = list;
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+
+        [HttpGet("GetParts")]
+        public ApiResponse GetParts()
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var list = new List<Part>();
+                var sql = @"
+SELECT PartID,
+       PartName
+  FROM Parts";
+                MySqlParameter[] parameters = [];
+                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
+                while (reader.Read())
+                    list.Add(new Part
+                    {
+                        PartID = reader["PartID"] != DBNull.Value ? Convert.ToInt32(reader["PartID"]) : -1,
+                        PartName = reader["PartName"] != DBNull.Value ? reader["PartName"].ToString()! : string.Empty
+                    });
+
+                apiResponse.Parameters["Parts"] = list;
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+
+        #endregion
+        
         #region Cars
 
         [HttpGet("GetUserCars")]
@@ -62,13 +143,14 @@ namespace api.garagecom.Controllers
             try
             {
                 var userId = HttpContext.Items["UserID"] as int? ?? -1;
-                var list = new List<UserCar>();
+                var list = new List<Car>();
 
                 var sql = @"
 SELECT c.CarID,
        c.Year,
        cm.CarModelID, cm.ModelName,
-       comp.BrandID, comp.BrandName
+       comp.BrandID, comp.BrandName,
+         c.Nickname, c.Kilos
   FROM Cars c
   JOIN CarModels cm ON c.CarModelID = cm.CarModelID
   JOIN Brands comp ON cm.BrandID = comp.BrandID
@@ -83,7 +165,7 @@ SELECT c.CarID,
 
                 using var reader = DatabaseHelper.ExecuteReader(sql, ps);
                 while (reader.Read())
-                    list.Add(new UserCar
+                    list.Add(new Car
                     {
                         CarID = reader["CarID"] != DBNull.Value ? Convert.ToInt32(reader["CarID"]) : -1,
                         Year = reader["Year"] != DBNull.Value ? Convert.ToInt32(reader["Year"]) : 0,
@@ -102,7 +184,9 @@ SELECT c.CarID,
                                     ? reader["BrandName"].ToString()!
                                     : string.Empty
                             }
-                        }
+                        },
+                        Nickname = reader["Nickname"] != DBNull.Value ? reader["Nickname"].ToString()! : string.Empty,
+                        Kilos = reader["Kilos"] != DBNull.Value ? Convert.ToDouble(reader["Kilos"]) : 0
                     });
 
                 var partSql = @"
@@ -178,82 +262,30 @@ SELECT cp.CarPartID,
             return r;
         }
 
-        #endregion
-
-        #region ComboBox
-
-        [HttpGet("GetCarModels")]
-        public ApiResponse GetCarModels()
+        [HttpPost("SetCar")]
+        public ApiResponse SetCar(int carModelId, string nickname, double kilos, int year)
         {
-            var apiResponse = new ApiResponse();
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            ApiResponse apiResponse = new ApiResponse();
             try
             {
-                var list = new List<CarModel>();
-                var sql = @"
-SELECT cm.CarModelID,
-       cm.ModelName,
-       comp.BrandID,
-       comp.BrandName
-  FROM CarModels cm
-  INNER JOIN Garagecom.Brands comp ON cm.BrandID = comp.BrandID";
-                MySqlParameter[] parameters = [];
-                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
-                while (reader.Read())
-                    list.Add(new CarModel
-                    {
-                        CarModelID = reader["CarModelID"] != DBNull.Value ? Convert.ToInt32(reader["CarModelID"]) : -1,
-                        ModelName =
-                            reader["ModelName"] != DBNull.Value ? reader["ModelName"].ToString()! : string.Empty,
-                        Brand = new Brand
-                        {
-                            BrandID = reader["BrandID"] != DBNull.Value ? Convert.ToInt32(reader["BrandID"]) : -1,
-                            BrandName = reader["BrandName"] != DBNull.Value
-                                ? reader["BrandName"].ToString()!
-                                : string.Empty
-                        }
-                    });
-
-                apiResponse.Parameters["CarModels"] = list;
-                apiResponse.Succeeded = true;
+                var sql =
+                    @"INSERT INTO Cars (CarModelID, UserID, Nickname, Kilos, Year, CreatedIn) VALUES (@cmid, @uid, @nick, @kilos, @y, NOW())";
+                MySqlParameter[] parameters =
+                {
+                    new("cmid", carModelId),
+                    new("uid", userId),
+                    new("nick", nickname),
+                    new("kilos", kilos),
+                    new("y", year)
+                };
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
                 apiResponse.Succeeded = false;
-                apiResponse.Message = ex.Message;
+                apiResponse.Message = e.Message;
             }
-
-            return apiResponse;
-        }
-
-        [HttpGet("GetParts")]
-        public ApiResponse GetParts()
-        {
-            var apiResponse = new ApiResponse();
-            try
-            {
-                var list = new List<Part>();
-                var sql = @"
-SELECT PartID,
-       PartName
-  FROM Parts";
-                MySqlParameter[] parameters = [];
-                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
-                while (reader.Read())
-                    list.Add(new Part
-                    {
-                        PartID = reader["PartID"] != DBNull.Value ? Convert.ToInt32(reader["PartID"]) : -1,
-                        PartName = reader["PartName"] != DBNull.Value ? reader["PartName"].ToString()! : string.Empty
-                    });
-
-                apiResponse.Parameters["Parts"] = list;
-                apiResponse.Succeeded = true;
-            }
-            catch (Exception ex)
-            {
-                apiResponse.Succeeded = false;
-                apiResponse.Message = ex.Message;
-            }
-
             return apiResponse;
         }
 
