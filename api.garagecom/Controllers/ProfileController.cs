@@ -56,9 +56,6 @@ namespace api.garagecom.Controllers
                             Email = (reader["Email"] != DBNull.Value ? reader["Email"].ToString() : "")!,
                             PhoneNumber =
                                 (reader["Mobile"] != DBNull.Value ? reader["Mobile"].ToString() : "")!,
-                            ProfilePicture = (reader["ProfilePicture"] != DBNull.Value
-                                ? reader["ProfilePicture"].ToString()
-                                : "")!,
                             AttachmentName = (reader["Avatar"] != DBNull.Value ? reader["Avatar"].ToString() : "")!
                         };
                 }
