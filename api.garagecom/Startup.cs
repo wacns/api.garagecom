@@ -43,12 +43,12 @@ public class Startup
             options.MinimumSameSitePolicy = SameSiteMode.None;
             options.Secure = CookieSecurePolicy.Always;
         });
-        
+
         var credPath = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS_PATH")!;
         if (string.IsNullOrEmpty(credPath))
             throw new InvalidOperationException(
                 "FIREBASE_CREDENTIALS_PATH not set in environment or .env file.");
-        FirebaseApp.Create(new AppOptions()
+        FirebaseApp.Create(new AppOptions
         {
             Credential = GoogleCredential.FromFile(credPath)
         });
@@ -65,7 +65,7 @@ public class Startup
         });
         app.UseRouting();
         app.UseCors("CorsPolicy");
-        
+
         app.UseRequestResponseLogging();
 
         app.UseForwardedHeaders(new ForwardedHeadersOptions

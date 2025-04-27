@@ -1,5 +1,9 @@
-﻿using FirebaseAdmin.Messaging;
-using Microsoft.AspNetCore.Mvc;
+﻿#region
+
+using FirebaseAdmin.Messaging;
+
+#endregion
+
 public class NotificationRequest
 {
     public string DeviceToken { get; set; } = "";
@@ -7,6 +11,7 @@ public class NotificationRequest
     public string Body { get; set; } = "";
     public IReadOnlyDictionary<string, string> Data { get; set; }
 }
+
 namespace api.garagecom.Utils
 {
     public class NotificationHelper
@@ -16,7 +21,7 @@ namespace api.garagecom.Utils
             if (string.IsNullOrEmpty(req.DeviceToken))
                 return false;
 
-            var message = new Message()
+            var message = new Message
             {
                 Token = req.DeviceToken,
                 Notification = new Notification
@@ -29,7 +34,7 @@ namespace api.garagecom.Utils
 
             try
             {
-                var messageId = 
+                var messageId =
                     await FirebaseMessaging.DefaultInstance.SendAsync(message);
                 return true;
             }
@@ -40,4 +45,3 @@ namespace api.garagecom.Utils
         }
     }
 }
-

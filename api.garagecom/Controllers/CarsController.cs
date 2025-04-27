@@ -35,6 +35,7 @@ public class CarPart
     public int LifeTimeInterval { get; set; }
     public DateTime CreatedIn { get; set; }
     public DateTime NextDueDate { get; set; }
+    public string Notes { get; set; }
 }
 
 public class Car
@@ -133,7 +134,7 @@ SELECT PartID,
         }
 
         #endregion
-        
+
         #region Cars
 
         [HttpGet("GetUserCars")]
@@ -216,10 +217,12 @@ SELECT cp.CarPartID,
            cp.CreatedIn
          ),
          INTERVAL cp.LifeTimeInterval MONTH
-       ) AS NextDueDate
+       ) AS NextDueDate,
+    cp.Notes
   FROM CarParts cp
   JOIN Parts p ON cp.PartID = p.PartID
- WHERE cp.CarID = @cid";
+    JOIN Statuses s ON cp.StatusID = s.StatusID
+ WHERE cp.CarID = @cid AND s.Status = 'Active'";
 
                 foreach (var car in list)
                 {
@@ -246,7 +249,8 @@ SELECT cp.CarPartID,
                                 : DateTime.MinValue,
                             NextDueDate = reader2["NextDueDate"] != DBNull.Value
                                 ? Convert.ToDateTime(reader2["NextDueDate"])
-                                : DateTime.MinValue
+                                : DateTime.MinValue,
+                            Notes = (reader["Notes"] == DBNull.Value ? "" : reader["Notes"].ToString()) ?? string.Empty
                         });
                 }
 
@@ -266,7 +270,7 @@ SELECT cp.CarPartID,
         public ApiResponse SetCar(int carModelId, string? nickname, double? kilos, int year)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
-            ApiResponse apiResponse = new ApiResponse();
+            var apiResponse = new ApiResponse();
             try
             {
                 var sql =
@@ -288,16 +292,18 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID,
                 apiResponse.Succeeded = false;
                 apiResponse.Message = e.Message;
             }
+
             return apiResponse;
         }
 
         [HttpPost("DeleteCar")]
         public ApiResponse DeleteCar(int carId)
         {
-            ApiResponse apiResponse = new ApiResponse();
+            var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"UPDATE Cars SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarID = @cid";
+                var sql =
+                    @"UPDATE Cars SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarID = @cid";
                 MySqlParameter[] parameters =
                 {
                     new("st", "Inactive"),
@@ -310,6 +316,7 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID,
                 apiResponse.Succeeded = false;
                 apiResponse.Message = e.Message;
             }
+
             return apiResponse;
         }
 
@@ -332,7 +339,7 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
                     new("cid", carId),
                     new("pid", partId),
                     new("lti", lifeTimeInterval),
-                    new("Notes", notes),
+                    new("Notes", notes)
                 ];
                 r = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -344,7 +351,7 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
 
             return r;
         }
-        
+
         [HttpPost("UpdateCarPart")]
         public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, string? notes)
         {
@@ -373,10 +380,11 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
         [HttpPost("DeleteCarPart")]
         public ApiResponse DeleteCarPart(int carPartId)
         {
-            ApiResponse apiResponse = new ApiResponse();
+            var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"UPDATE CarParts SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarPartID = @cpid";
+                var sql =
+                    @"UPDATE CarParts SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarPartID = @cpid";
                 MySqlParameter[] parameters =
                 {
                     new("st", "InActive"),
@@ -389,6 +397,7 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
                 apiResponse.Succeeded = false;
                 apiResponse.Message = e.Message;
             }
+
             return apiResponse;
         }
 

@@ -19,7 +19,7 @@ public class DashboardController : Controller
         var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/DashboardSigns/");
         return File(file, "application/octet-stream", fileName);
     }
-    
+
     [HttpPost("GetDashboardSigns")]
     public async Task<ApiResponse> GetDashboardSigns([FromForm] IFormFile file)
     {
@@ -43,8 +43,9 @@ public class DashboardController : Controller
                         {
                             Logo = (reader["Logo"] == DBNull.Value ? "" : reader["Logo"].ToString()) ?? string.Empty,
                             Title = (reader["Title"] == DBNull.Value ? "" : reader["Title"].ToString()) ?? string.Empty,
-                            Description = (reader["Description"] == DBNull.Value ? "" : reader["Description"].ToString()) ??
-                                          string.Empty,
+                            Description =
+                                (reader["Description"] == DBNull.Value ? "" : reader["Description"].ToString()) ??
+                                string.Empty,
                             Solution = (reader["Solution"] == DBNull.Value ? "" : reader["Solution"].ToString()) ??
                                        string.Empty
                         });
@@ -52,14 +53,13 @@ public class DashboardController : Controller
             }
 
             apiResponse.Succeeded = true;
-
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
             throw;
         }
-        
+
         apiResponse.Parameters.Add("defects", defectsList);
         return apiResponse;
     }

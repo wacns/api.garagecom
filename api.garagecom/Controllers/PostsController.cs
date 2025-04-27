@@ -35,6 +35,7 @@ public class Post
     public int VoteValue { get; set; }
     public bool AllowComments { get; set; }
 }
+
 public class PostCategory
 {
     public int PostCategoryID { get; set; }
@@ -85,6 +86,43 @@ namespace api.garagecom.Controllers
 
         #endregion
 
+
+        [HttpGet("GetPostAttachment")]
+        public async Task<FileResult> GetPostAttachment(string fileName)
+        {
+            var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Posts/");
+            return File(file, "application/octet-stream", fileName);
+        }
+
+        [HttpPost("SetPostAttachment")]
+        public ApiResponse SetPostAttachment(int postId, IFormFile file)
+        {
+            var attachmentName = $"{postId}_{Guid.NewGuid().ToString()}";
+            var task = new Task(async void () =>
+            {
+                var status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Posts/");
+                if (!status) return;
+                var sql = @"UPDATE Posts
+                            SET Attachment = @Attachment
+                            WHERE PostID = @PostID";
+                MySqlParameter[] parameters =
+                [
+                    new("Attachment", attachmentName),
+                    new("PostID", postId)
+                ];
+                DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            });
+            task.Start();
+            return new ApiResponse
+            {
+                Succeeded = true,
+                Parameters =
+                {
+                    ["AttachmentName"] = attachmentName
+                }
+            };
+        }
+
         #region Posts
 
         [HttpGet("GetPosts")]
@@ -96,8 +134,7 @@ namespace api.garagecom.Controllers
             {
                 var posts = new List<Post>();
                 var sql =
-                    @"
-WITH VoteData AS (
+                    @"WITH VoteData AS (
     SELECT
         PostID,
         SUM(Value) AS VoteCount,
@@ -149,10 +186,9 @@ FROM Posts P
                    ON CD.PostID = P.PostID
 WHERE
     (@PostCategoryIDs = ''
-        OR FIND_IN_SET(P.PostCategoryID, @PostCategoryIDs))
+        OR FIND_IN_SET(P.PostCategoryID, @PostCategoryID))
   AND S.Status = 'Active'
-ORDER BY P.CreatedIn DESC;
-";
+ORDER BY P.CreatedIn DESC;";
                 MySqlParameter[] parameters =
                 [
                     new("PostCategoryID", string.Join(",", categoryId)),
@@ -192,8 +228,9 @@ ORDER BY P.CreatedIn DESC;
                             CountComments = reader["CommentCount"] == DBNull.Value
                                 ? 0
                                 : Convert.ToInt32(reader["CommentCount"]),
-                            VoteValue = reader["Voted"] == DBNull.Value ? 0 :
-                                    Convert.ToInt32(reader["Voted"]),
+                            VoteValue = reader["UserVoteValue"] == DBNull.Value
+                                ? 0
+                                : Convert.ToInt32(reader["UserVoteValue"]),
                             Comments = []
                         });
                 }
@@ -225,7 +262,7 @@ ORDER BY P.CreatedIn DESC;
                         });
                     }
                 }
-                
+
                 apiResponse.Parameters["Posts"] = posts;
                 apiResponse.Succeeded = true;
             }
@@ -237,7 +274,7 @@ ORDER BY P.CreatedIn DESC;
 
             return apiResponse;
         }
-        
+
         [HttpPost("SetPost")]
         public async Task<ApiResponse> SetPost(string title, int postCategoryId, string description)
         {
@@ -260,7 +297,7 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Descripti
                     new("Description", description),
                     new("StatusName", "Active")
                 ];
-                
+
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
 
                 apiResponse.Succeeded = true;
@@ -371,25 +408,25 @@ INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID)
                         WHERE L.UserID = @PostUserID
                         ORDER BY L.CreatedIn DESC
                         LIMIT 1;";
-                    int postUserId = -1;
-                    string deviceToken = "";
+                    var postUserId = -1;
+                    var deviceToken = "";
                     parameters =
                     [
                         new MySqlParameter("PostID", postId)
                     ];
-                    ApiResponse apiResponseScalar = DatabaseHelper.ExecuteScalar(sql, parameters);
+                    var apiResponseScalar = DatabaseHelper.ExecuteScalar(sql, parameters);
                     if (apiResponseScalar.Succeeded)
                     {
                         postUserId = Convert.ToInt32(apiResponseScalar.Parameters["PostUserID"]);
                         deviceToken = apiResponseScalar.Parameters["DeviceToken"].ToString();
                     }
+
                     if (postUserId != -1 && deviceToken != "")
                     {
                         var notification = new NotificationRequest
                         {
                             Title = "New Comment On Your Post",
-                            Body = text,
-                            
+                            Body = text
                         };
                         var notificationResponse = NotificationHelper.SendNotification(notification);
                     }
@@ -564,7 +601,7 @@ UPDATE Comments
         #endregion
 
         #region Votes
-        
+
         [HttpPost("SetVote")]
         public ApiResponse SetVote(int postId, int value)
         {
@@ -572,16 +609,16 @@ UPDATE Comments
             var apiResponse = new ApiResponse();
             try
             {
-                    var sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'Active';
+                var sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'Active';
                         INSERT INTO Votes (UserID, PostID, CreatedIn, Value, StatusID)
                             VALUES (@UserID, @PostID, NOW(), @UpVote, @StatusID)";
-                    MySqlParameter[] parameters =
-                    [
-                        new("UserID", userId),
-                        new("PostID", postId),
-                        new("UpVote", value)
-                    ];
-                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                MySqlParameter[] parameters =
+                [
+                    new("UserID", userId),
+                    new("PostID", postId),
+                    new("UpVote", value)
+                ];
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception ex)
             {
@@ -591,7 +628,7 @@ UPDATE Comments
 
             return apiResponse;
         }
-        
+
         [HttpPost("DeleteVote")]
         public ApiResponse DeleteVote(int postId)
         {
@@ -599,17 +636,17 @@ UPDATE Comments
             var apiResponse = new ApiResponse();
             try
             {
-                    var sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'InActive';
+                var sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'InActive';
                         UPDATE Votes
                             SET StatusID = @StatusID,
                                 ModifiedIn = NOW()
                             WHERE UserID = @UserID AND PostID = @PostID;";
-                    MySqlParameter[] parameters =
-                    [
-                        new("UserID", userId),
-                        new("PostID", postId),
-                    ];
-                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                MySqlParameter[] parameters =
+                [
+                    new("UserID", userId),
+                    new("PostID", postId)
+                ];
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception ex)
             {
@@ -621,42 +658,5 @@ UPDATE Comments
         }
 
         #endregion
-        
-        
-        [HttpGet("GetPostAttachment")]
-        public async Task<FileResult> GetPostAttachment(string fileName)
-        {
-            var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Posts/");
-            return File(file, "application/octet-stream", fileName);
-        }
-
-        [HttpPost("SetPostAttachment")]
-        public ApiResponse SetPostAttachment(int postId, IFormFile file)
-        {
-            var attachmentName = $"{postId}_{Guid.NewGuid().ToString()}";
-            Task task = new Task(async void () =>
-            {
-                bool status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Posts/");
-                if (!status) return;
-                var sql = @"UPDATE Posts
-                            SET Attachment = @Attachment
-                            WHERE PostID = @PostID";
-                MySqlParameter[] parameters =
-                [
-                    new("Attachment", attachmentName),
-                    new("PostID", postId)
-                ];
-                DatabaseHelper.ExecuteNonQuery(sql, parameters);
-            });
-            task.Start();
-            return new ApiResponse
-            {
-                Succeeded = true,
-                Parameters =
-                {
-                    ["AttachmentName"] = attachmentName
-                }
-            };
-        }
     }
 }

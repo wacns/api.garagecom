@@ -99,22 +99,22 @@ namespace api.garagecom.Controllers
 
             return apiResponse;
         }
-        
+
         [HttpGet("GetAvatarAttachment")]
         public async Task<FileResult> GetAvatarAttachment(string fileName)
         {
             var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Avatars/");
             return File(file, "application/octet-stream", fileName);
         }
-        
+
         [HttpPost("SetAvatarAttachment")]
         public ApiResponse SetAvatarAttachment(IFormFile file)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var attachmentName = $"{userId}_{Guid.NewGuid().ToString()}";
-            Task task = new Task(async void () =>
+            var task = new Task(async void () =>
             {
-                bool status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Avatars/");
+                var status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Avatars/");
                 if (!status) return;
                 var sql = @"UPDATE GeneralInformation
                             SET Avatar = @Attachment
