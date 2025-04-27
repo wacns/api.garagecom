@@ -136,5 +136,30 @@ namespace api.garagecom.Controllers
                 }
             };
         }
+
+        [HttpPost("Logout")]
+        public ApiResponse Logout()
+        {
+            var userId = HttpContext.Items["UserID"] as int? ?? -1;
+            var apiResponse = new ApiResponse();
+
+            var sql =
+                @"UPDATE Logins SET Logins.LastToken = null WHERE UserID = @UserID ORDER BY Logins.CreatedIn LIMIT 1;";
+            MySqlParameter[] parameters =
+            [
+                new("UserID", userId)
+            ];
+            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            if (!apiResponse.Succeeded)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Error Logging Out!";
+                return apiResponse;
+            }
+
+            apiResponse.Succeeded = true;
+
+            return apiResponse;
+        }
     }
 }

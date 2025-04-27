@@ -415,21 +415,16 @@ INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID)
                         new MySqlParameter("PostID", postId)
                     ];
                     var apiResponseScalar = DatabaseHelper.ExecuteScalar(sql, parameters);
-                    if (apiResponseScalar.Succeeded)
-                    {
-                        postUserId = Convert.ToInt32(apiResponseScalar.Parameters["PostUserID"]);
-                        deviceToken = apiResponseScalar.Parameters["DeviceToken"].ToString();
-                    }
+                    if (apiResponseScalar.Succeeded) deviceToken = apiResponseScalar.Parameters["Result"].ToString();
 
-                    if (postUserId != -1 && deviceToken != "")
+                    if (string.IsNullOrEmpty(deviceToken) || string.IsNullOrWhiteSpace(deviceToken)) return;
+                    var notification = new NotificationRequest
                     {
-                        var notification = new NotificationRequest
-                        {
-                            Title = "New Comment On Your Post",
-                            Body = text
-                        };
-                        var notificationResponse = NotificationHelper.SendNotification(notification);
-                    }
+                        DeviceToken = deviceToken,
+                        Title = "New Comment On Your Post",
+                        Body = text
+                    };
+                    var notificationResponse = NotificationHelper.SendNotification(notification);
                 });
                 task.Start();
             }

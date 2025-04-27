@@ -250,7 +250,8 @@ SELECT cp.CarPartID,
                             NextDueDate = reader2["NextDueDate"] != DBNull.Value
                                 ? Convert.ToDateTime(reader2["NextDueDate"])
                                 : DateTime.MinValue,
-                            Notes = (reader["Notes"] == DBNull.Value ? "" : reader["Notes"].ToString()) ?? string.Empty
+                            Notes = (reader2["Notes"] == DBNull.Value ? "" : reader2["Notes"].ToString()) ??
+                                    string.Empty
                         });
                 }
 

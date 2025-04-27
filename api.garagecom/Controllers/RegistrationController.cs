@@ -221,7 +221,7 @@ public class RegistrationController : Controller
     [HttpGet("ValidateUser")]
     public IActionResult ValidateUser(string token)
     {
-        if (string.IsNullOrEmpty(token)) throw new UnauthorizedAccessException("Token not found");
+        if (string.IsNullOrEmpty(token)) return StatusCode(401);
 
         Dictionary<string, object> payload;
         try
@@ -234,19 +234,17 @@ public class RegistrationController : Controller
         }
         catch (TokenExpiredException)
         {
-            throw new UnauthorizedAccessException("Token expired");
+            return StatusCode(401);
         }
         catch (SignatureVerificationException)
         {
-            throw new UnauthorizedAccessException("Token not valid");
+            return StatusCode(401);
         }
         catch (Exception)
         {
-            throw new UnauthorizedAccessException("Token not valid");
+            return StatusCode(401);
         }
 
-        if (payload == null) throw new UnauthorizedAccessException("Token not valid");
-
-        return Ok();
+        return payload == null ? StatusCode(401) : Ok();
     }
 }
