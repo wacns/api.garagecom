@@ -318,18 +318,21 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID,
         #region Parts
 
         [HttpPost("SetCarPart")]
-        public ApiResponse SetCarPart(int carId, int partId, int lifeTimeInterval)
+        public ApiResponse SetCarPart(int carId, int partId, int lifeTimeInterval, string? notes)
         {
             var r = new ApiResponse();
             try
             {
                 var sql =
-                    @"INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn) VALUES (@cid, @pid, @lti, NOW())";
+                    @"SELECT StatusID INTO @StatusID
+FROM Statuses WHERE Status = 'Active' ;
+INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusID) VALUES (@cid, @pid, @lti, NOW(), @Notes, @StatusID)";
                 MySqlParameter[] parameters =
                 [
                     new("cid", carId),
                     new("pid", partId),
-                    new("lti", lifeTimeInterval)
+                    new("lti", lifeTimeInterval),
+                    new("Notes", notes),
                 ];
                 r = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -340,6 +343,53 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID,
             }
 
             return r;
+        }
+        
+        [HttpPost("UpdateCarPart")]
+        public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, string? notes)
+        {
+            var r = new ApiResponse();
+            try
+            {
+                var sql =
+                    @"UPDATE CarParts SET PartID = @pid, LifeTimeInterval = @lti, Notes = @Notes WHERE CarPartID = @cpid";
+                MySqlParameter[] parameters =
+                {
+                    new("cpid", carPartId),
+                    new("lti", lifeTimeInterval),
+                    new("Notes", notes)
+                };
+                r = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            }
+            catch (Exception ex)
+            {
+                r.Succeeded = false;
+                r.Message = ex.Message;
+            }
+
+            return r;
+        }
+
+        [HttpPost("DeleteCarPart")]
+        public ApiResponse DeleteCarPart(int carPartId)
+        {
+            ApiResponse apiResponse = new ApiResponse();
+            try
+            {
+                var sql = @"UPDATE CarParts SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarPartID = @cpid";
+                MySqlParameter[] parameters =
+                {
+                    new("st", "InActive"),
+                    new("cpid", carPartId)
+                };
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            }
+            catch (Exception e)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = e.Message;
+            }
+            return apiResponse;
         }
 
         [HttpPost("RenewCarPart")]
