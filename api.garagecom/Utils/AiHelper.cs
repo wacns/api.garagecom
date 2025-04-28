@@ -123,7 +123,7 @@ public static class AiHelper
 
         var binaryData = BinaryData.FromBytes(imageBytes);
         var openAiClient = new OpenAIClient(OpenaiApiKey);
-        var chatClient = openAiClient.GetChatClient("gpt-4.1-mini");
+        var chatClient = openAiClient.GetChatClient("gpt-4.1");
         List<ChatMessage> messages =
         [
             new UserChatMessage(
