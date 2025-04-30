@@ -18,12 +18,11 @@ public class RegistrationController : Controller
 {
     [HttpPost("register")]
     public ApiResponse Register(string userName, string email, string password, string firstName,
-        string lastName, string phoneNumber, string deviceToken)
+        string lastName, string phoneNumber)
     {
         var apiResponse = new ApiResponse();
         if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) ||
-            string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8 ||
-            string.IsNullOrEmpty(deviceToken))
+            string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
         {
             apiResponse.Succeeded = false;
             apiResponse.Message = "Please fill all fields";
@@ -108,16 +107,7 @@ public class RegistrationController : Controller
             var userId = Convert.ToInt32(apiResponse.Parameters["Result"].ToString());
 
             var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
-
-            sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn, DeviceToken) 
-                    VALUES (@UserID, @LastToken, NOW(), @DeviceToken);";
-            parameters =
-            [
-                new MySqlParameter("UserID", userId),
-                new MySqlParameter("LastToken", token),
-                new MySqlParameter("DeviceToken", deviceToken)
-            ];
-            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            
             var result = new ApiResponse
             {
                 Parameters =
@@ -139,7 +129,7 @@ public class RegistrationController : Controller
     }
 
     [HttpPost("login")]
-    public ApiResponse Login(string userName, string password, string deviceToken)
+    public ApiResponse Login(string userName, string password)
     {
         var apiResponse = new ApiResponse();
         if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(password))
@@ -195,13 +185,12 @@ public class RegistrationController : Controller
 
         var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
 
-        sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn, DeviceToken)
-                    VALUES (@UserID, @LastToken, NOW(), @DeviceToken)";
+        sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn)
+                    VALUES (@UserID, @LastToken, NOW())";
         parameters =
         [
             new MySqlParameter("UserID", userId),
-            new MySqlParameter("LastToken", token),
-            new MySqlParameter("DeviceToken", deviceToken)
+            new MySqlParameter("LastToken", token)
         ];
         apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
         if (!apiResponse.Succeeded)

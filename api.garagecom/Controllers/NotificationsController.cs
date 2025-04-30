@@ -27,8 +27,7 @@ public class NotificationsController : Controller
                 new("DeviceToken", deviceToken),
                 new("UserId", userId)
             ];
-            DatabaseHelper.ExecuteNonQuery(sql, parameters);
-            apiResponse.Succeeded = true;
+            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
         }
         catch (Exception e)
         {
