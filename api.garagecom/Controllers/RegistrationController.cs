@@ -107,7 +107,7 @@ public class RegistrationController : Controller
             var userId = Convert.ToInt32(apiResponse.Parameters["Result"].ToString());
 
             var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
-            
+
             var result = new ApiResponse
             {
                 Parameters =

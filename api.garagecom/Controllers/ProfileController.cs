@@ -141,7 +141,6 @@ namespace api.garagecom.Controllers
         public ApiResponse Logout()
         {
             var userId = HttpContext.Items["UserID"] as int? ?? -1;
-            var apiResponse = new ApiResponse();
 
             var sql =
                 @"UPDATE Logins SET Logins.LastToken = null WHERE UserID = @UserID ORDER BY Logins.CreatedIn DESC LIMIT 1;";
@@ -149,7 +148,7 @@ namespace api.garagecom.Controllers
             [
                 new("UserID", userId)
             ];
-            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            var apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             if (!apiResponse.Succeeded)
             {
                 apiResponse.Succeeded = false;
