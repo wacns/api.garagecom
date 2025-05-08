@@ -90,6 +90,11 @@ public class DefectsModel
     public List<string> defects { get; set; }
 }
 
+public class ValidateUserTextModel
+{
+    public bool IsValid { get; set; }
+}
+
 // ─── Helper ─────────────────────────────────────────────────────────────────
 
 public static class AiHelper
@@ -110,6 +115,55 @@ public static class AiHelper
         await file.CopyToAsync(memoryStream);
         var bytes = memoryStream.ToArray();
         return Convert.ToBase64String(bytes);
+    }
+
+    public static async Task<bool> ValidateUserText(string userText)
+    {
+        var validationModel = new ValidateUserTextModel
+        {
+            IsValid = true
+        };
+        try
+        {
+            var openAiClient = new OpenAIClient(OpenaiApiKey);
+            var chatClient = openAiClient.GetChatClient("gpt-4.1");
+            List<ChatMessage> messages =
+            [
+                new UserChatMessage(userText),
+                new SystemChatMessage(
+                    "make sure the text has no offensive language or hate language, a text that will spread hate or cause problems as well as its related to cars customizing, repairing, inquiries, troubleshooting, or anything related to cars community only as well as no dating context is allowed. Make sure to return an object as follows:\n{\n     \"IsValid\": true/false\n}\n- also make sure you validate it for any input language\n\nfor example:\n1- \nuser: Hi\nresponse: {\n     \"IsValid\": false\n}\n\n2-\nuser: where is the nearest garage?\nresponse: {\n     \"IsValid\": true\n}\n3-\nuser: dodge is a shitty car.\nresponse: {\n     \"IsValid\": false\n}\n\n4-\nuser: what is this sign on my dashboard\nresponse: {\n     \"IsValid\": true\n}\n\n5-\nuser: الدوج ما يمشي\nresponse: {\n     \"IsValid\": false\n}\n\n6-\nuser: الموستنق حنطور\nresponse: {\n     \"IsValid\": false\n}\n\n7-\nuser: من تطلع وياي؟\nresponse: {\n     \"IsValid\": false\n}")
+            ];
+            ChatCompletionOptions options = new()
+            {
+                ResponseModalities = ChatResponseModalities.Text,
+                ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
+                    "user_text_validation",
+                    BinaryData.FromBytes("""
+                                         {
+                                           "type": "object",
+                                           "properties": {
+                                             "IsValid": {
+                                               "type": "boolean",
+                                               "description": "An indicator to test if the user text is valid or not."
+                                             }
+                                           },
+                                           "required": ["IsValid"],
+                                           "additionalProperties": false
+                                         }
+                                         """u8.ToArray()),
+                    jsonSchemaIsStrict: true)
+            };
+            ChatCompletion completion = await chatClient.CompleteChatAsync(messages, options);
+            using var structuredJson = JsonDocument.Parse(completion.Content[0].Text);
+            validationModel =
+                JsonConvert.DeserializeObject<ValidateUserTextModel>(structuredJson.RootElement.ToString());
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return validationModel?.IsValid ?? true;
     }
 
     public static async Task<List<string>> GetDashboardSigns(IFormFile file)

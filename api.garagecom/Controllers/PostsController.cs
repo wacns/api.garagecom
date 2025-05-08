@@ -29,7 +29,6 @@ public class Post
     public string CreatedIn { get; set; }
     public int PostCategoryID { get; set; }
     public string UserName { get; set; }
-    public List<Comment> Comments { get; set; }
     public int CountVotes { get; set; }
     public int CountComments { get; set; }
     public int VoteValue { get; set; }
@@ -126,7 +125,7 @@ namespace api.garagecom.Controllers
         #region Posts
 
         [HttpGet("GetPosts")]
-        public ApiResponse GetPosts(int[] categoryId)
+        public ApiResponse GetPosts(int[] categoryId, int page)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
@@ -176,7 +175,7 @@ SELECT
 FROM Posts P
          INNER JOIN PostCategories C
                     ON C.PostCategoryID = P.PostCategoryID
-         INNER JOIN GeneralInformation G
+         INNER JOIN Users G
                     ON G.UserID = P.UserID
          INNER JOIN Statuses S
                     ON S.StatusID = P.StatusID
@@ -185,14 +184,17 @@ FROM Posts P
          LEFT JOIN CommentData CD
                    ON CD.PostID = P.PostID
 WHERE
-    (@PostCategoryIDs = ''
+    (@PostCategoryID = ''
         OR FIND_IN_SET(P.PostCategoryID, @PostCategoryID))
-  AND S.Status = 'Active'
-ORDER BY P.CreatedIn DESC;";
+ORDER BY P.CreatedIn DESC -- LIMIT @Offset, @PageSize;";
+                const int pageSize = 15;
+                var offset = ((page == 0 ? 1 : page) - 1) * pageSize;
                 MySqlParameter[] parameters =
                 [
                     new("PostCategoryID", string.Join(",", categoryId)),
-                    new("UserID", userId)
+                    new("UserID", userId),
+                    new("Offset", offset),
+                    new("PageSize", pageSize)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
@@ -230,37 +232,8 @@ ORDER BY P.CreatedIn DESC;";
                                 : Convert.ToInt32(reader["CommentCount"]),
                             VoteValue = reader["UserVoteValue"] == DBNull.Value
                                 ? 0
-                                : Convert.ToInt32(reader["UserVoteValue"]),
-                            Comments = []
+                                : Convert.ToInt32(reader["UserVoteValue"])
                         });
-                }
-
-                sql =
-                    @"SELECT CommentID, Comments.UserID, Comments.PostID, Text, Comments.CreatedIn, Comments.ModifiedIn
-                            FROM Comments
-                            INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostCategoryID IN (@PostCategoryID, -10)
-                            INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
-                            INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
-                            WHERE SP.Status = 'Active' AND SC.Status = 'Active'";
-                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
-                {
-                    while (reader.Read())
-                    {
-                        var postId = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1;
-                        var post = posts.FirstOrDefault(p => p.PostID == postId);
-                        post?.Comments.Add(new Comment
-                        {
-                            UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            PostID = postId,
-                            Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
-                            CreatedIn = reader["CreatedIn"] != DBNull.Value
-                                ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : "",
-                            ModifiedIn = reader["ModifiedIn"] != DBNull.Value
-                                ? Convert.ToDateTime(reader["ModifiedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
-                                : ""
-                        });
-                    }
                 }
 
                 apiResponse.Parameters["Posts"] = posts;
@@ -276,18 +249,26 @@ ORDER BY P.CreatedIn DESC;";
         }
 
         [HttpPost("SetPost")]
-        public async Task<ApiResponse> SetPost(string title, int postCategoryId, string description)
+        public async Task<ApiResponse> SetPost(string title, int postCategoryId, string description, bool allowComments)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
+                var validate = await AiHelper.ValidateUserText($"Title: {title}\nDescription: {description}");
+                if (!validate)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Make sure your post contains appropriate and useful content.";
+                    return apiResponse;
+                }
+
                 var sql = @"
 SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @StatusName;
-INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Description)
-                            VALUES (@UserID, @Title, @PostCategoryID, NOW(), @StatusID, @Description);
+INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Description, AllowComments)
+                            VALUES (@UserID, @Title, @PostCategoryID, NOW(), @StatusID, @Description, @AllowComments);
                             SELECT LAST_INSERT_ID();";
                 MySqlParameter[] parameters =
                 [
@@ -295,11 +276,14 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Descripti
                     new("Title", title),
                     new("PostCategoryID", postCategoryId),
                     new("Description", description),
-                    new("StatusName", "Active")
+                    new("StatusName", "Active"),
+                    new("AllowComments", allowComments)
                 ];
-
-                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-
+                var scalar = DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString();
+                var postId = !string.IsNullOrEmpty(scalar) && !string.IsNullOrWhiteSpace(scalar)
+                    ? Convert.ToInt32(scalar)
+                    : -1;
+                apiResponse.Parameters.Add("PostID", postId);
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -339,7 +323,7 @@ INSERT INTO Posts (UserID, Title, PostCategoryID, CreatedIn, StatusID, Descripti
             return apiResponse;
         }
 
-        [HttpDelete("DeletePost")]
+        [HttpPost("DeletePost")]
         public ApiResponse DeletePost(int postId)
         {
             var apiResponse = new ApiResponse();
@@ -357,6 +341,33 @@ UPDATE Posts
                 [
                     new("PostID", postId),
                     new("Status", "InActive")
+                ];
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+
+        [HttpPost("ClosePost")]
+        public ApiResponse ClosePost(int postId)
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var sql = @"
+UPDATE Posts
+                            SET Posts.AllowComments = false,
+                                ModifiedIn = NOW()
+                            WHERE PostID = @PostID";
+                MySqlParameter[] parameters =
+                [
+                    new("PostID", postId)
+                    // new("Status", "InActive")
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -494,23 +505,27 @@ UPDATE Comments
         }
 
         [HttpGet("GetCommentsByPostId")]
-        public ApiResponse GetCommentsByPostId(int postId)
+        public ApiResponse GetCommentsByPostId(int postId, int page)
         {
             var apiResponse = new ApiResponse();
             try
             {
                 var comments = new List<Comment>();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
+                    @"SELECT CommentID, Comments.UserID, Users.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
                             FROM Comments
-                                INNER JOIN GeneralInformation ON GeneralInformation.UserID = Comments.UserID
+                                INNER JOIN Users ON Users.UserID = Comments.UserID
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostID = @PostID
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
                             INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
-                            WHERE SC.Status = 'Active' AND SP.Status = 'Active'";
+                            WHERE SC.Status = 'Active' AND SP.Status = 'Active' ORDER BY Comments.CreatedIn -- LIMIT @Offset, @PageSize;";
+                const int pageSize = 15;
+                var offset = ((page == 0 ? 1 : page) - 1) * pageSize;
                 MySqlParameter[] parameters =
                 [
-                    new("PostID", postId)
+                    new("PostID", postId),
+                    new("Offset", offset),
+                    new("PageSize", pageSize)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
@@ -551,9 +566,9 @@ UPDATE Comments
             {
                 var comment = new Comment();
                 var sql =
-                    @"SELECT CommentID, Comments.UserID, GeneralInformation.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
+                    @"SELECT CommentID, Comments.UserID, Users.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
                             FROM Comments
-                            INNER JOIN GeneralInformation ON GeneralInformation.UserID = Comments.UserID
+                            INNER JOIN Users ON Users.UserID = Comments.UserID
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
                             INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID

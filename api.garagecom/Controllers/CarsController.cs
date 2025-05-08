@@ -15,9 +15,9 @@ public class Brand
     public string BrandName { get; set; }
 }
 
-public class CarModel
+public class Model
 {
-    public int CarModelID { get; set; }
+    public int ModelID { get; set; }
     public string ModelName { get; set; }
     public Brand Brand { get; set; }
 }
@@ -43,8 +43,8 @@ public class Car
     public int CarID { get; set; } // maps to Cars.CarID
     public int Year { get; set; }
     public string? Nickname { get; set; }
-    public double? Kilos { get; set; }
-    public CarModel CarModel { get; set; }
+    public int? Kilos { get; set; }
+    public Model Model { get; set; }
     public List<CarPart> Parts { get; set; } = new();
 }
 
@@ -58,26 +58,55 @@ namespace api.garagecom.Controllers
     {
         #region ComboBox
 
-        [HttpGet("GetCarModels")]
-        public ApiResponse GetCarModels()
+        [HttpGet("GetBrands")]
+        public ApiResponse GetBrands()
         {
             var apiResponse = new ApiResponse();
             try
             {
-                var list = new List<CarModel>();
+                var list = new List<Brand>();
+                var sql = @"SELECT BrandID,
+                            BrandName
+                      FROM Brands";
+                MySqlParameter[] parameters = [];
+                using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
+                while (reader.Read())
+                    list.Add(new Brand
+                    {
+                        BrandID = reader["BrandID"] != DBNull.Value ? Convert.ToInt32(reader["BrandID"]) : -1,
+                        BrandName = reader["BrandName"] != DBNull.Value ? reader["BrandName"].ToString()! : string.Empty
+                    });
+                apiResponse.Parameters["Brands"] = list;
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
+
+        [HttpGet("GetModels")]
+        public ApiResponse GetModels()
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var list = new List<Model>();
                 var sql = @"
-SELECT cm.CarModelID,
+SELECT cm.ModelID,
        cm.ModelName,
        comp.BrandID,
        comp.BrandName
-  FROM CarModels cm
+  FROM Models cm
   INNER JOIN Garagecom.Brands comp ON cm.BrandID = comp.BrandID";
                 MySqlParameter[] parameters = [];
                 using var reader = DatabaseHelper.ExecuteReader(sql, parameters);
                 while (reader.Read())
-                    list.Add(new CarModel
+                    list.Add(new Model
                     {
-                        CarModelID = reader["CarModelID"] != DBNull.Value ? Convert.ToInt32(reader["CarModelID"]) : -1,
+                        ModelID = reader["ModelID"] != DBNull.Value ? Convert.ToInt32(reader["ModelID"]) : -1,
                         ModelName =
                             reader["ModelName"] != DBNull.Value ? reader["ModelName"].ToString()! : string.Empty,
                         Brand = new Brand
@@ -89,7 +118,7 @@ SELECT cm.CarModelID,
                         }
                     });
 
-                apiResponse.Parameters["CarModels"] = list;
+                apiResponse.Parameters["Models"] = list;
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -143,17 +172,17 @@ SELECT PartID,
             var r = new ApiResponse();
             try
             {
-                var userId = HttpContext.Items["UserID"] as int? ?? -1;
+                var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
                 var list = new List<Car>();
 
                 var sql = @"
 SELECT c.CarID,
        c.Year,
-       cm.CarModelID, cm.ModelName,
+       cm.ModelID, cm.ModelName,
        comp.BrandID, comp.BrandName,
          c.Nickname, c.Kilos
   FROM Cars c
-  JOIN CarModels cm ON c.CarModelID = cm.CarModelID
+  JOIN Models cm ON c.ModelID = cm.ModelID
   JOIN Brands comp ON cm.BrandID = comp.BrandID
   JOIN Statuses s   ON c.StatusID    = s.StatusID
  WHERE s.Status = @st
@@ -170,10 +199,10 @@ SELECT c.CarID,
                     {
                         CarID = reader["CarID"] != DBNull.Value ? Convert.ToInt32(reader["CarID"]) : -1,
                         Year = reader["Year"] != DBNull.Value ? Convert.ToInt32(reader["Year"]) : 0,
-                        CarModel = new CarModel
+                        Model = new Model
                         {
-                            CarModelID = reader["CarModelID"] != DBNull.Value
-                                ? Convert.ToInt32(reader["CarModelID"])
+                            ModelID = reader["ModelID"] != DBNull.Value
+                                ? Convert.ToInt32(reader["ModelID"])
                                 : -1,
                             ModelName = reader["ModelName"] != DBNull.Value
                                 ? reader["ModelName"].ToString()!
@@ -187,7 +216,7 @@ SELECT c.CarID,
                             }
                         },
                         Nickname = reader["Nickname"] != DBNull.Value ? reader["Nickname"].ToString()! : string.Empty,
-                        Kilos = reader["Kilos"] != DBNull.Value ? Convert.ToDouble(reader["Kilos"]) : null
+                        Kilos = reader["Kilos"] != DBNull.Value ? Convert.ToInt32(reader["Kilos"]) : null
                     });
 
                 var partSql = @"
@@ -267,8 +296,34 @@ SELECT cp.CarPartID,
             return r;
         }
 
+        [HttpPost("UpdateUserCar")]
+        public ApiResponse UpdateUserCar(int carId, string? nickname, int? kilos, int? year)
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var sql =
+                    @"UPDATE Cars SET Nickname = IFNULL(@nick, Nickname), Kilos = IFNULL(@kilos, Kilos), Year = IFNULL(@y, Year) WHERE CarID = @cid";
+                MySqlParameter[] parameters =
+                {
+                    new("nick", nickname),
+                    new("kilos", kilos),
+                    new("y", year),
+                    new("cid", carId)
+                };
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            }
+            catch (Exception e)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = e.Message;
+            }
+
+            return apiResponse;
+        }
+
         [HttpPost("SetCar")]
-        public ApiResponse SetCar(int carModelId, string? nickname, double? kilos, int year)
+        public ApiResponse SetCar(int ModelID, string? nickname, int? kilos, int year)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
@@ -276,10 +331,10 @@ SELECT cp.CarPartID,
             {
                 var sql =
                     @"SELECT StatusID INTO @StatusID
-FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID, Nickname, Kilos, Year, CreatedIn, StatusID) VALUES (@cmid, @uid, @nick, @kilos, @y, NOW(), @StatusID)";
+FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (ModelID, UserID, Nickname, Kilos, Year, CreatedIn, StatusID) VALUES (@cmid, @uid, @nick, @kilos, @y, NOW(), @StatusID)";
                 MySqlParameter[] parameters =
                 {
-                    new("cmid", carModelId),
+                    new("cmid", ModelID),
                     new("uid", userId),
                     new("nick", nickname),
                     new("kilos", kilos),
@@ -326,7 +381,8 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID,
         #region Parts
 
         [HttpPost("SetCarPart")]
-        public ApiResponse SetCarPart(int carId, int partId, int lifeTimeInterval, string? notes)
+        public ApiResponse SetCarPart(int carId, int partId, int lifeTimeInterval, DateOnly lastReplacementDate,
+            string? notes)
         {
             var r = new ApiResponse();
             try
@@ -334,13 +390,14 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (CarModelID, UserID,
                 var sql =
                     @"SELECT StatusID INTO @StatusID
 FROM Statuses WHERE Status = 'Active' ;
-INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusID) VALUES (@cid, @pid, @lti, NOW(), @Notes, @StatusID)";
+INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusID) VALUES (@cid, @pid, @lti, @LastReplacementDate, @Notes, @StatusID)";
                 MySqlParameter[] parameters =
                 [
                     new("cid", carId),
                     new("pid", partId),
                     new("lti", lifeTimeInterval),
-                    new("Notes", notes)
+                    new("Notes", notes),
+                    new("LastReplacementDate", lastReplacementDate.ToString("yyyy-MM-dd"))
                 ];
                 r = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }

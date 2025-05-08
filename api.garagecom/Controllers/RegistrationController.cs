@@ -70,7 +70,7 @@ public class RegistrationController : Controller
             }
 
             var sql = @"SELECT COUNT(*) > 0 AS Existing
-                            FROM GeneralInformation
+                            FROM Users
                             WHERE LOWER(Email) = LOWER(@Email)
                                OR LOWER(UserName) = LOWER(@UserName)";
             MySqlParameter[] parameters =
@@ -88,7 +88,7 @@ public class RegistrationController : Controller
             }
 
             sql =
-                @"INSERT INTO GeneralInformation (UserName, Email, Password, FirstName, LastName, CreatedIn, Mobile)
+                @"INSERT INTO Users (UserName, Email, Password, FirstName, LastName, CreatedIn, Mobile)
                     VALUES (@UserName, @Email, @Password, @FirstName, @LastName, NOW(), @PhoneNumber);
                     SELECT LAST_INSERT_ID() AS UserID;
                     ";
@@ -107,6 +107,15 @@ public class RegistrationController : Controller
             var userId = Convert.ToInt32(apiResponse.Parameters["Result"].ToString());
 
             var token = Authentication.GenerateJsonWebToken(userName.ToLower(), userId, email);
+
+            sql = @"INSERT INTO Logins (UserID, LastToken, CreatedIn)
+                    VALUES (@UserID, @LastToken, NOW())";
+            parameters =
+            [
+                new MySqlParameter("UserID", userId),
+                new MySqlParameter("LastToken", token)
+            ];
+            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
 
             var result = new ApiResponse
             {
@@ -153,7 +162,7 @@ public class RegistrationController : Controller
         string email;
 
         var sql = @"SELECT UserID, Email
-                            FROM GeneralInformation
+                            FROM Users
                             WHERE LOWER(UserName) = LOWER(@UserName) AND Password = @Password";
         MySqlParameter[] parameters =
         [
@@ -235,5 +244,63 @@ public class RegistrationController : Controller
         }
 
         return payload == null ? StatusCode(401) : Ok();
+    }
+
+    [HttpGet("UploadSigns")]
+    public async Task<IActionResult> UploadSigns()
+    {
+        var apiResponse = new ApiResponse();
+        try
+        {
+            var uploadsDirectory = Path.Combine("C:", "Users", "ABU-LAYLA", "Documents", "University", "ITSE498",
+                "Dashboard Signs", "Dashboard Signs");
+            var supportedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+
+            var imageFiles = Directory.GetFiles(uploadsDirectory)
+                .Where(file => supportedExtensions.Contains(Path.GetExtension(file).ToLower()))
+                .ToList();
+
+            foreach (var imagePath in imageFiles)
+            {
+                var fileName = Path.GetFileName(imagePath).Split(".")[0];
+                var attachmentId = "DashboardSign_" + Guid.NewGuid();
+
+                // Open the file stream directly
+                using (var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
+                {
+                    var formFile = new FormFile(
+                        fileStream,
+                        0,
+                        fileStream.Length,
+                        "file",
+                        fileName
+                    );
+
+                    if (formFile.Length <= 0) continue;
+                    var result = await S3Helper.UploadAttachmentAsync(formFile, attachmentId, "Images/DashboardSigns/");
+                    if (!result) continue;
+                    var sql = @"UPDATE DashboardSigns 
+                                   SET Logo = @Logo 
+                                   WHERE Title = @Title";
+
+                    MySqlParameter[] parameters =
+                    [
+                        new("Logo", attachmentId),
+                        new("Title", fileName)
+                    ];
+                    var dbResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                }
+            }
+
+            apiResponse.Succeeded = true;
+            apiResponse.Message = "Files processed successfully";
+            return Ok(apiResponse);
+        }
+        catch (Exception e)
+        {
+            apiResponse.Succeeded = false;
+            apiResponse.Message = $"Error processing files: {e.Message}";
+            return Ok(apiResponse);
+        }
     }
 }

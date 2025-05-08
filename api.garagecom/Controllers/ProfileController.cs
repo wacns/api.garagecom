@@ -39,7 +39,7 @@ namespace api.garagecom.Controllers
             {
                 var user = new User();
                 var sql =
-                    @"SELECT UserID, UserName, FirstName, LastName, Email, Mobile, GI.Avatar FROM GeneralInformation GI WHERE UserID = @UserID";
+                    @"SELECT UserID, UserName, FirstName, LastName, Email, Mobile, GI.Avatar FROM Users GI WHERE UserID = @UserID";
                 MySqlParameter[] parameters =
                 [
                     new("UserID", userId)
@@ -80,7 +80,7 @@ namespace api.garagecom.Controllers
             try
             {
                 var sql =
-                    @"UPDATE GeneralInformation SET FirstName = @FirstName, LastName = @LastName, Mobile = @PhoneNumber WHERE UserID = @UserID";
+                    @"UPDATE Users SET FirstName = @FirstName, LastName = @LastName, Mobile = @PhoneNumber WHERE UserID = @UserID";
                 MySqlParameter[] parameters =
                 [
                     new("FirstName", firstName),
@@ -116,7 +116,7 @@ namespace api.garagecom.Controllers
             {
                 var status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Avatars/");
                 if (!status) return;
-                var sql = @"UPDATE GeneralInformation
+                var sql = @"UPDATE Users
                             SET Avatar = @Attachment
                             WHERE UserID = @UserID";
                 MySqlParameter[] parameters =
