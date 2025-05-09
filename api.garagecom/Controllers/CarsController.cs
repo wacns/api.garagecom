@@ -224,34 +224,35 @@ SELECT cp.CarPartID,
        cp.PartID,
        p.PartName,
        cp.LifeTimeInterval,
-       COALESCE(
-           (
-             SELECT MAX(r.CreatedIn)
-             FROM CarPartsRenewal r
-             WHERE r.CarPartID = cp.CarPartID
-             ORDER BY r.CreatedIn DESC
-             LIMIT 1
-           ),
-           cp.CreatedIn
-         ) AS CreatedIn,
+        COALESCE(
+                (
+                    SELECT MAX(r.CreatedIn)
+                    FROM CarPartsRenewal r
+                    WHERE r.CarPartID = cp.CarPartID
+                    ORDER BY r.CreatedIn DESC
+                    LIMIT 1
+                ),
+                cp.CreatedIn
+        ) AS CreatedIn,
+       -- cp.CreatedIn AS CreatedIn,
        DATE_ADD(
-         COALESCE(
-           (
-             SELECT DATE_ADD(r.CreatedIn, INTERVAL 1 DAY)
-             FROM CarPartsRenewal r
-             WHERE r.CarPartID = cp.CarPartID
-             ORDER BY r.CreatedIn DESC
-             LIMIT 1
-           ),
-           cp.CreatedIn
-         ),
-         INTERVAL cp.LifeTimeInterval MONTH
+               COALESCE(
+                       (
+                           SELECT DATE_ADD(r.CreatedIn, INTERVAL 1 DAY)
+                           FROM CarPartsRenewal r
+                           WHERE r.CarPartID = cp.CarPartID
+                           ORDER BY r.CreatedIn DESC
+                           LIMIT 1
+                       ),
+                       cp.CreatedIn
+               ),
+               INTERVAL cp.LifeTimeInterval MONTH
        ) AS NextDueDate,
-    cp.Notes
-  FROM CarParts cp
-  JOIN Parts p ON cp.PartID = p.PartID
-    JOIN Statuses s ON cp.StatusID = s.StatusID
- WHERE cp.CarID = @cid AND s.Status = 'Active'";
+       cp.Notes
+FROM CarParts cp
+         JOIN Parts p ON cp.PartID = p.PartID
+         JOIN Statuses s ON cp.StatusID = s.StatusID
+WHERE cp.CarID = @cid AND s.Status = 'Active'";
 
                 foreach (var car in list)
                 {
@@ -411,18 +412,20 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
         }
 
         [HttpPost("UpdateCarPart")]
-        public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, string? notes)
+        public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, DateTime lastReplacementDate, string? notes)
         {
             var r = new ApiResponse();
             try
             {
                 var sql =
-                    @"UPDATE CarParts SET PartID = @pid, LifeTimeInterval = @lti, Notes = @Notes WHERE CarPartID = @cpid";
+                    @"DELETE FROM CarPartsRenewal WHERE CarPartID = @cpid AND @lrd != (SELECT CreatedIn FROM CarParts CP WHERE CP.CarPartID = @cpid);
+                    UPDATE CarParts SET LifeTimeInterval = @lti, Notes = @Notes, CreatedIn = @lrd WHERE CarPartID = @cpid;";
                 MySqlParameter[] parameters =
                 {
                     new("cpid", carPartId),
                     new("lti", lifeTimeInterval),
-                    new("Notes", notes)
+                    new("Notes", notes),
+                    new("lrd", lastReplacementDate.ToString("yyyy-MM-dd")),
                 };
                 r = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -465,7 +468,8 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
             var r = new ApiResponse();
             try
             {
-                var sql = @"INSERT INTO CarPartsRenewal (CarPartID, CreatedIn) VALUES (@cpid, NOW())";
+                var sql = @"INSERT INTO CarPartsRenewal (CarPartID, CreatedIn) VALUES (@cpid, NOW());
+-- UPDATE CarParts SET CreatedIn = NOW() WHERE CarPartID = @cpid";
                 var ps = new[] { new MySqlParameter("cpid", carPartId) };
                 r = DatabaseHelper.ExecuteNonQuery(sql, ps);
             }

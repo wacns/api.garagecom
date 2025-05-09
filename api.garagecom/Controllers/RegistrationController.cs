@@ -160,9 +160,11 @@ public class RegistrationController : Controller
 
         int userId;
         string email;
+        string roleName;
 
-        var sql = @"SELECT UserID, Email
+        var sql = @"SELECT UserID, Email, R.RoleName
                             FROM Users
+                            INNER JOIN Garagecom.Roles R ON R.RoleID = Users.RoleID
                             WHERE LOWER(UserName) = LOWER(@UserName) AND Password = @Password";
         MySqlParameter[] parameters =
         [

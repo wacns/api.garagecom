@@ -80,20 +80,50 @@ LIMIT 1;
         }
 
         [HttpPost("ProcessReport")]
-        public ApiResponse ProcessReport(int? postId, int? commentId, string action)
+        public async Task<ApiResponse> ProcessReport(string action, int? commentId = null, int? postId = null)
         {
             var apiResponse = new ApiResponse();
             var actionUserId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             try
             {
-                var sql =
-                    "UPDATE Reports SET ProcessedIn = NOW() WHERE Reports.ProcessedIn IS NULL AND PostID = @PostID AND CommentID = @CommentID;";
-                MySqlParameter[] parameters =
+                string sql;
+                MySqlParameter[] parameters;
+                if (commentId != null)
+                {
+                    sql =
+                        "UPDATE Reports SET ProcessedIn = NOW() WHERE Reports.ProcessedIn IS NULL AND CommentID = @CommentID;";
+                    parameters =
+                    [
+                        new("PostID", postId),
+                        new("CommentID", commentId)
+                        
+                    ];
+                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                }
+                else if (postId != null)
+                {
+                    sql =
+                        "UPDATE Reports SET ProcessedIn = NOW() WHERE Reports.ProcessedIn IS NULL AND PostID = @PostID;";
+                    parameters =
+                    [
+                        new("PostID", postId),
+                        new("CommentID", commentId)
+                        
+                    ];
+                    apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                }
+                else
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Please provide PostID or CommentID";
+                    return apiResponse;
+                }
+
+                parameters =
                 [
                     new("PostID", postId),
                     new("CommentID", commentId)
                 ];
-                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
                 sql =
                     "SELECT U.userId FROM (SELECT userId FROM Comments WHERE CommentID = @CommentID UNION SELECT userId FROM Posts WHERE PostID = @PostID) AS U WHERE U.userId IS NOT NULL;";
                 var userScalar = DatabaseHelper.ExecuteScalar(sql, parameters);
@@ -111,11 +141,22 @@ LIMIT 1;
 
                 if (action.Equals("block", StringComparison.CurrentCultureIgnoreCase))
                 {
-                    sql = @"DELETE FROM Posts P 
-                            WHERE P.PostID = @PostID;
-                            DELETE FROM Comments C 
-                            WHERE C.CommentID = @CommentID;";
+                    sql = @"UPDATE Posts P SET P.StatusID = 3 WHERE P.PostID = @PostID;
+                            UPDATE Comments C SET C.StatusID = 3 WHERE C.CommentID = @CommentID;
+                            ";
                     apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                    sql = @"SELECT COUNT(*) FROM ReportActions RA WHERE RA.ReportedUserID = @reportedUserId AND RA.Action = 'BLOCK';";
+                    var blockCount = int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"]?.ToString() ?? string.Empty);
+                    var userDeviceToken = GeneralHelper.GetDeviceTokenByUserId(reportedUserId);
+                    if (!string.IsNullOrEmpty(userDeviceToken) && !string.IsNullOrWhiteSpace(userDeviceToken) && blockCount >= 3)
+                    {
+                        await NotificationHelper.SendNotification(new NotificationRequest()
+                        {
+                            Body = "You have been blocked from using the Car Community!",
+                            Title = "Blocked",
+                            DeviceToken = userDeviceToken
+                        });
+                    }
                 }
             }
             catch (Exception e)
