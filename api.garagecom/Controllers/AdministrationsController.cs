@@ -94,9 +94,8 @@ LIMIT 1;
                         "UPDATE Reports SET ProcessedIn = NOW() WHERE Reports.ProcessedIn IS NULL AND CommentID = @CommentID;";
                     parameters =
                     [
-                        new("PostID", postId),
-                        new("CommentID", commentId)
-                        
+                        new MySqlParameter("PostID", postId),
+                        new MySqlParameter("CommentID", commentId)
                     ];
                     apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
                 }
@@ -106,9 +105,8 @@ LIMIT 1;
                         "UPDATE Reports SET ProcessedIn = NOW() WHERE Reports.ProcessedIn IS NULL AND PostID = @PostID;";
                     parameters =
                     [
-                        new("PostID", postId),
-                        new("CommentID", commentId)
-                        
+                        new MySqlParameter("PostID", postId),
+                        new MySqlParameter("CommentID", commentId)
                     ];
                     apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
                 }
@@ -121,8 +119,8 @@ LIMIT 1;
 
                 parameters =
                 [
-                    new("PostID", postId),
-                    new("CommentID", commentId)
+                    new MySqlParameter("PostID", postId),
+                    new MySqlParameter("CommentID", commentId)
                 ];
                 sql =
                     "SELECT U.userId FROM (SELECT userId FROM Comments WHERE CommentID = @CommentID UNION SELECT userId FROM Posts WHERE PostID = @PostID) AS U WHERE U.userId IS NOT NULL;";
@@ -145,18 +143,20 @@ LIMIT 1;
                             UPDATE Comments C SET C.StatusID = 3 WHERE C.CommentID = @CommentID;
                             ";
                     apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-                    sql = @"SELECT COUNT(*) FROM ReportActions RA WHERE RA.ReportedUserID = @reportedUserId AND RA.Action = 'BLOCK';";
-                    var blockCount = int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"]?.ToString() ?? string.Empty);
+                    sql =
+                        @"SELECT COUNT(*) FROM ReportActions RA WHERE RA.ReportedUserID = @reportedUserId AND RA.Action = 'BLOCK';";
+                    var blockCount =
+                        int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"]?.ToString() ??
+                                  string.Empty);
                     var userDeviceToken = GeneralHelper.GetDeviceTokenByUserId(reportedUserId);
-                    if (!string.IsNullOrEmpty(userDeviceToken) && !string.IsNullOrWhiteSpace(userDeviceToken) && blockCount >= 3)
-                    {
-                        await NotificationHelper.SendNotification(new NotificationRequest()
+                    if (!string.IsNullOrEmpty(userDeviceToken) && !string.IsNullOrWhiteSpace(userDeviceToken) &&
+                        blockCount >= 3)
+                        await NotificationHelper.SendNotification(new NotificationRequest
                         {
                             Body = "You have been blocked from using the Car Community!",
                             Title = "Blocked",
                             DeviceToken = userDeviceToken
                         });
-                    }
                 }
             }
             catch (Exception e)

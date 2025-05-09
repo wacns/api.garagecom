@@ -47,7 +47,8 @@ namespace api.garagecom.Controllers
     [Route("api/[controller]")]
     public class PostsController : Controller
     {
-        const int PageSize = 3;
+        private const int PageSize = 3;
+
         #region ComboBox
 
         [HttpGet("GetPostCategories")]
@@ -86,8 +87,89 @@ namespace api.garagecom.Controllers
 
         #endregion
 
+        [HttpPost("SetReport")]
+        public ApiResponse SetReport(int itemId, bool isComment = false, bool isPost = false)
+        {
+            // 1. Get the calling user’s ID
+            var userId = HttpContext.Items["UserID"] == null
+                ? -1
+                : Convert.ToInt32(HttpContext.Items["UserID"]!);
+
+            // 2. Validate flags: exactly one must be true
+            if (!(isComment ^ isPost)) // XOR: true if exactly one of them is true
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid request: you must set exactly one of isComment or isPost to true."
+                };
+
+            // 3. Build common parameter list
+            var parameters = new[]
+            {
+                new MySqlParameter("@UserID", userId),
+                new MySqlParameter("@ItemID", itemId)
+            };
+
+            string sql;
+            try
+            {
+                if (isComment)
+                {
+                    // 4a. (Optional) Verify comment exists
+                    const string checkCommentSql = "SELECT COUNT(*) FROM Comments WHERE CommentID = @ItemID;";
+                    var commentCount = Convert.ToInt32(
+                        DatabaseHelper.ExecuteScalar(checkCommentSql, parameters).Parameters["Result"].ToString()
+                    );
+                    if (commentCount == 0)
+                        return new ApiResponse
+                        {
+                            Succeeded = false,
+                            Message = $"No comment found with ID = {itemId}."
+                        };
+
+                    // 5a. Prepare INSERT for a comment report
+                    sql = @"
+                INSERT INTO Reports (ReportingUserID, CommentID)
+                VALUES (@UserID, @ItemID);
+            ";
+                }
+                else // isPost == true
+                {
+                    // 4b. (Optional) Verify post exists
+                    const string checkPostSql = "SELECT COUNT(*) FROM posts WHERE PostID = @ItemID;";
+                    var postCount = Convert.ToInt32(
+                        DatabaseHelper.ExecuteScalar(checkPostSql, parameters).Parameters["Result"].ToString()
+                    );
+                    if (postCount == 0)
+                        return new ApiResponse
+                        {
+                            Succeeded = false,
+                            Message = $"No post found with ID = {itemId}."
+                        };
+
+                    // 5b. Prepare INSERT for a post report
+                    sql = @"
+                INSERT INTO Reports (ReportingUserID, PostID)
+                VALUES (@UserID, @ItemID);
+            ";
+                }
+
+                // 6. Execute the insert
+                var apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                return apiResponse;
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = ex.Message
+                };
+            }
+        }
+
         #region Attachments
-        
+
         [HttpGet("GetUserAvatarByUserId")]
         public async Task<FileResult> GetUserAvatarByUserId(int userId)
         {
@@ -326,11 +408,12 @@ ORDER BY P.CreatedIn DESC LIMIT @Offset, @PageSize;";
 FROM Posts P
 WHERE
     P.UserID = @UserID";
-                int postsCount =
-                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ?? string.Empty);
+                var postsCount =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
 
                 apiResponse.Parameters["Posts"] = posts;
-                apiResponse.Parameters["HasMore"] = (PageSize * page) < postsCount;
+                apiResponse.Parameters["HasMore"] = PageSize * page < postsCount;
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -341,7 +424,7 @@ WHERE
 
             return apiResponse;
         }
-        
+
         [HttpGet("GetPostByPostId")]
         public ApiResponse GetPostByPostId(int postId)
         {
@@ -404,7 +487,7 @@ WHERE
     P.PostID = @PostID AND P.StatusID != 3";
                 MySqlParameter[] parameters =
                 [
-                    new("PostID", postId),
+                    new("PostID", postId)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
@@ -574,11 +657,12 @@ FROM Posts P
 WHERE
     (@PostCategoryID = ''
         OR FIND_IN_SET(P.PostCategoryID, @PostCategoryID))";
-                int postsCount =
-                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ?? string.Empty);
+                var postsCount =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
 
                 apiResponse.Parameters["Posts"] = posts;
-                apiResponse.Parameters["HasMore"] = (PageSize * page) < postsCount;
+                apiResponse.Parameters["HasMore"] = PageSize * page < postsCount;
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -886,16 +970,17 @@ UPDATE Comments
                                 : ""
                         });
                 }
-                
+
                 sql = @"SELECT COUNT(*)
 FROM Garagecom.Comments C
 WHERE
     C.PostID = @PostID";
-                int postsCount =
-                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ?? string.Empty);
+                var postsCount =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
 
                 apiResponse.Parameters["Comments"] = comments;
-                apiResponse.Parameters["HasMore"] = (PageSize * page) < postsCount;
+                apiResponse.Parameters["HasMore"] = PageSize * page < postsCount;
                 apiResponse.Succeeded = true;
             }
             catch (Exception ex)
@@ -1017,92 +1102,5 @@ WHERE
         }
 
         #endregion
-
-        [HttpPost("SetReport")]
-        public ApiResponse SetReport(int itemId, bool isComment = false, bool isPost = false)
-        {
-            // 1. Get the calling user’s ID
-            int userId = HttpContext.Items["UserID"] == null
-                ? -1
-                : Convert.ToInt32(HttpContext.Items["UserID"]!);
-
-            // 2. Validate flags: exactly one must be true
-            if (!(isComment ^ isPost)) // XOR: true if exactly one of them is true
-            {
-                return new ApiResponse
-                {
-                    Succeeded = false,
-                    Message = "Invalid request: you must set exactly one of isComment or isPost to true."
-                };
-            }
-
-            // 3. Build common parameter list
-            MySqlParameter[] parameters = new MySqlParameter[]
-            {
-                new MySqlParameter("@UserID", userId),
-                new MySqlParameter("@ItemID", itemId)
-            };
-
-            string sql;
-            try
-            {
-                if (isComment)
-                {
-                    // 4a. (Optional) Verify comment exists
-                    const string checkCommentSql = "SELECT COUNT(*) FROM Comments WHERE CommentID = @ItemID;";
-                    var commentCount = Convert.ToInt32(
-                        DatabaseHelper.ExecuteScalar(checkCommentSql, parameters).Parameters["Result"].ToString()
-                    );
-                    if (commentCount == 0)
-                    {
-                        return new ApiResponse
-                        {
-                            Succeeded = false,
-                            Message = $"No comment found with ID = {itemId}."
-                        };
-                    }
-
-                    // 5a. Prepare INSERT for a comment report
-                    sql = @"
-                INSERT INTO Reports (ReportingUserID, CommentID)
-                VALUES (@UserID, @ItemID);
-            ";
-                }
-                else // isPost == true
-                {
-                    // 4b. (Optional) Verify post exists
-                    const string checkPostSql = "SELECT COUNT(*) FROM posts WHERE PostID = @ItemID;";
-                    var postCount = Convert.ToInt32(
-                        DatabaseHelper.ExecuteScalar(checkPostSql, parameters).Parameters["Result"].ToString()
-                    );
-                    if (postCount == 0)
-                    {
-                        return new ApiResponse
-                        {
-                            Succeeded = false,
-                            Message = $"No post found with ID = {itemId}."
-                        };
-                    }
-
-                    // 5b. Prepare INSERT for a post report
-                    sql = @"
-                INSERT INTO Reports (ReportingUserID, PostID)
-                VALUES (@UserID, @ItemID);
-            ";
-                }
-
-                // 6. Execute the insert
-                ApiResponse apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
-                return apiResponse;
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse
-                {
-                    Succeeded = false,
-                    Message = ex.Message
-                };
-            }
-        }
     }
 }

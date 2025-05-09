@@ -21,7 +21,7 @@ public static class GeneralHelper
 
         return Convert.ToBase64String(passwordHash);
     }
-    
+
     public static string? GetDeviceTokenByUserId(int userId)
     {
         var sql = "SELECT DeviceToken FROM Logins WHERE UserID = @UserID ORDER BY Logins.CreatedIn DESC LIMIT 1";

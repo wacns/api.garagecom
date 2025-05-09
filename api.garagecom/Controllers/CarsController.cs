@@ -412,7 +412,8 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
         }
 
         [HttpPost("UpdateCarPart")]
-        public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, DateTime lastReplacementDate, string? notes)
+        public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, DateTime lastReplacementDate,
+            string? notes)
         {
             var r = new ApiResponse();
             try
@@ -425,7 +426,7 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
                     new("cpid", carPartId),
                     new("lti", lifeTimeInterval),
                     new("Notes", notes),
-                    new("lrd", lastReplacementDate.ToString("yyyy-MM-dd")),
+                    new("lrd", lastReplacementDate.ToString("yyyy-MM-dd"))
                 };
                 r = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
