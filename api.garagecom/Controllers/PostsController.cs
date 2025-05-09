@@ -85,6 +85,7 @@ namespace api.garagecom.Controllers
 
         #endregion
 
+        #region Attachments
 
         [HttpGet("GetPostAttachment")]
         public async Task<FileResult> GetPostAttachment(string fileName)
@@ -100,13 +101,11 @@ namespace api.garagecom.Controllers
         {
             // 1) Validate
             if (file == null || file.Length == 0)
-            {
                 return new ApiResponse
                 {
                     Succeeded = false,
-                    Message   = "No file was uploaded."
+                    Message = "No file was uploaded."
                 };
-            }
 
             // 2) Upload
             var attachmentName = $"{postId}_{Guid.NewGuid()}";
@@ -121,49 +120,206 @@ namespace api.garagecom.Controllers
                 return new ApiResponse
                 {
                     Succeeded = false,
-                    Message   = $"Error uploading to S3: {ex.Message}"
+                    Message = $"Error uploading to S3: {ex.Message}"
                 };
             }
 
             if (!uploaded)
-            {
                 return new ApiResponse
                 {
                     Succeeded = false,
-                    Message   = "Failed to upload file to S3."
+                    Message = "Failed to upload file to S3."
                 };
-            }
 
             // 3) Persist the new key in your Posts table
             var sql = @"
         UPDATE Posts
            SET Attachment = @Attachment
          WHERE PostID    = @PostID";
-            MySqlParameter[] parameters = {
-                new MySqlParameter("Attachment",  attachmentName),
-                new MySqlParameter("PostID",        postId)
+            MySqlParameter[] parameters =
+            {
+                new("Attachment", attachmentName),
+                new("PostID", postId)
             };
             var dbResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
 
             if (!dbResponse.Succeeded)
-            {
                 return new ApiResponse
                 {
                     Succeeded = false,
-                    Message   = "Database update failed."
+                    Message = "Database update failed."
                 };
-            }
 
             // 4) Return
             return new ApiResponse
             {
-                Succeeded  = true,
+                Succeeded = true,
                 Parameters = { ["AttachmentName"] = attachmentName }
             };
         }
 
+        #endregion
 
         #region Posts
+
+        [HttpGet("SearchPosts")]
+        public ApiResponse SearchPosts(string searchText)
+        {
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var posts = new List<SearchPostModel>();
+                var sql = @"SELECT PostID, Title, Description FROM Posts P";
+                var parameters = Array.Empty<MySqlParameter>();
+
+                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+                {
+                    while (reader.Read())
+                        posts.Add(new SearchPostModel
+                        {
+                            PostID = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1,
+                            Title = reader["Title"]?.ToString() ?? "",
+                            Description = reader["Description"]?.ToString() ?? ""
+                        });
+                }
+
+                // Ensure indexing before search
+                SearchHelper.IndexPosts(posts);
+
+                var searchResults = SearchHelper.Search(posts, searchText);
+                apiResponse.Parameters["Posts"] = searchResults;
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception e)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = e.Message;
+            }
+
+            return apiResponse;
+        }
+
+        [HttpGet("GetPostByUserID")]
+        public ApiResponse GetPostByUserId(int page)
+        {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var posts = new List<Post>();
+                var sql =
+                    @"WITH VoteData AS (
+    SELECT
+        PostID,
+        SUM(Value) AS VoteCount,
+        MAX(
+                CASE
+                    WHEN UserID = @UserID
+                        AND StatusID = (
+                            SELECT StatusID
+                            FROM Statuses
+                            WHERE Status = 'Active'
+                        )
+                        THEN Value
+                    END
+        ) AS UserVoteValue
+    FROM Votes
+    GROUP BY PostID
+),
+     CommentData AS (
+         SELECT
+             PostID,
+             COUNT(*) AS CommentCount
+         FROM Comments
+         GROUP BY PostID
+     )
+SELECT
+    P.PostID,
+    G.UserName,
+    P.AllowComments,
+    P.UserID,
+    P.Title,
+    P.Description,
+    P.Attachment,
+    P.CreatedIn,
+    P.PostCategoryID,
+    C.Title            AS CategoryTitle,
+    COALESCE(V.VoteCount, 0)                AS VoteCount,
+    COALESCE(CD.CommentCount, 0)            AS CommentCount,
+    V.UserVoteValue                        AS UserVoteValue
+FROM Posts P
+         INNER JOIN PostCategories C
+                    ON C.PostCategoryID = P.PostCategoryID
+         INNER JOIN Users G
+                    ON G.UserID = P.UserID
+         INNER JOIN Statuses S
+                    ON S.StatusID = P.StatusID
+         LEFT JOIN VoteData V
+                   ON V.PostID = P.PostID
+         LEFT JOIN CommentData CD
+                   ON CD.PostID = P.PostID
+WHERE
+    P.UserID = @UserID
+ORDER BY P.CreatedIn DESC -- LIMIT @Offset, @PageSize;";
+                const int pageSize = 15;
+                var offset = ((page == 0 ? 1 : page) - 1) * pageSize;
+                MySqlParameter[] parameters =
+                [
+                    new("UserID", userId),
+                    new("Offset", offset),
+                    new("PageSize", pageSize)
+                ];
+                using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
+                {
+                    while (reader.Read())
+                        posts.Add(new Post
+                        {
+                            PostID = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1,
+                            PostCategoryID = reader["PostID"] != DBNull.Value
+                                ? Convert.ToInt32(reader["PostCategoryID"])
+                                : -1,
+                            UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
+                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
+
+                            UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
+                            Description =
+                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                            Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
+                            CreatedIn = reader["CreatedIn"] != DBNull.Value
+                                ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
+                                : "",
+                            AllowComments = reader["AllowComments"] == DBNull.Value ||
+                                            Convert.ToBoolean(reader["AllowComments"]),
+                            PostCategory = new PostCategory
+                            {
+                                PostCategoryID = reader["PostCategoryID"] != DBNull.Value
+                                    ? Convert.ToInt32(reader["PostCategoryID"])
+                                    : -1,
+                                Title = (reader["CategoryTitle"] != DBNull.Value
+                                    ? reader["CategoryTitle"].ToString()
+                                    : "")!
+                            },
+                            CountVotes = reader["VoteCount"] == DBNull.Value ? 0 : Convert.ToInt32(reader["VoteCount"]),
+                            CountComments = reader["CommentCount"] == DBNull.Value
+                                ? 0
+                                : Convert.ToInt32(reader["CommentCount"]),
+                            VoteValue = reader["UserVoteValue"] == DBNull.Value
+                                ? 0
+                                : Convert.ToInt32(reader["UserVoteValue"])
+                        });
+                }
+
+                apiResponse.Parameters["Posts"] = posts;
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception ex)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = ex.Message;
+            }
+
+            return apiResponse;
+        }
 
         [HttpGet("GetPosts")]
         public ApiResponse GetPosts(int[] categoryId, int page)

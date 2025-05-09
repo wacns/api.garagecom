@@ -10,8 +10,11 @@
         <PackageReference Include="AWSSDK.S3" Version="4.0.0-preview.13"/>
         <PackageReference Include="dotenv.net" Version="3.2.1"/>
         <PackageReference Include="FirebaseAdmin" Version="3.2.0"/>
+        <PackageReference Include="FuzzySharp" Version="2.0.2"/>
         <PackageReference Include="Google.Apis.Auth" Version="1.69.0"/>
         <PackageReference Include="JWT" Version="11.0.0"/>
+        <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017"/>
+        <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017"/>
         <PackageReference Include="MySql.Data" Version="9.2.0"/>
         <PackageReference Include="OpenAI" Version="2.2.0-beta.4"/>
     </ItemGroup>

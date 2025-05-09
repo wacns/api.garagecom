@@ -136,8 +136,8 @@ namespace api.garagecom.Controllers
                 }
             };
         }
-        
-        
+
+
         [HttpPost("DeleteAvatar")]
         public ApiResponse DeleteAvatar()
         {
@@ -159,9 +159,10 @@ namespace api.garagecom.Controllers
                 Console.WriteLine(e);
                 throw;
             }
+
             return apiResponse;
         }
-        
+
 
         [HttpPost("Logout")]
         public ApiResponse Logout()
