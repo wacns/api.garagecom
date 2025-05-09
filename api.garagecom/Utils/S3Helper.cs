@@ -44,7 +44,7 @@ public abstract class S3Helper
                 InputStream = memoryStream,
                 BucketName = BucketName,
                 ContentType = "binary/octet-stream",
-                Key = path + attachmentId + extension,
+                Key = path + attachmentId,
                 DisablePayloadSigning = true
             };
             return (await client.PutObjectAsync(request)).HttpStatusCode == HttpStatusCode.OK ? true : false;

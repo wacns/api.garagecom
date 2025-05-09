@@ -136,6 +136,32 @@ namespace api.garagecom.Controllers
                 }
             };
         }
+        
+        
+        [HttpPost("DeleteAvatar")]
+        public ApiResponse DeleteAvatar()
+        {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var apiResponse = new ApiResponse();
+            try
+            {
+                var sql =
+                    @"UPDATE Users SET Avatar = null WHERE UserID = @UserID";
+                MySqlParameter[] parameters =
+                [
+                    new("UserID", userId)
+                ];
+                DatabaseHelper.ExecuteNonQuery(sql, parameters);
+                apiResponse.Succeeded = true;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+            return apiResponse;
+        }
+        
 
         [HttpPost("Logout")]
         public ApiResponse Logout()

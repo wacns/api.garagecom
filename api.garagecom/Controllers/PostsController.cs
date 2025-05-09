@@ -94,33 +94,74 @@ namespace api.garagecom.Controllers
         }
 
         [HttpPost("SetPostAttachment")]
-        public ApiResponse SetPostAttachment(int postId, IFormFile file)
+        public async Task<ApiResponse> SetPostAttachment(
+            [FromForm] int postId,
+            [FromForm] IFormFile file)
         {
-            var attachmentName = $"{postId}_{Guid.NewGuid().ToString()}";
-            var task = new Task(async void () =>
+            // 1) Validate
+            if (file == null || file.Length == 0)
             {
-                var status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Posts/");
-                if (!status) return;
-                var sql = @"UPDATE Posts
-                            SET Attachment = @Attachment
-                            WHERE PostID = @PostID";
-                MySqlParameter[] parameters =
-                [
-                    new("Attachment", attachmentName),
-                    new("PostID", postId)
-                ];
-                DatabaseHelper.ExecuteNonQuery(sql, parameters);
-            });
-            task.Start();
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message   = "No file was uploaded."
+                };
+            }
+
+            // 2) Upload
+            var attachmentName = $"{postId}_{Guid.NewGuid()}";
+            bool uploaded;
+            try
+            {
+                uploaded = await S3Helper
+                    .UploadAttachmentAsync(file, attachmentName, "Images/Posts/");
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message   = $"Error uploading to S3: {ex.Message}"
+                };
+            }
+
+            if (!uploaded)
+            {
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message   = "Failed to upload file to S3."
+                };
+            }
+
+            // 3) Persist the new key in your Posts table
+            var sql = @"
+        UPDATE Posts
+           SET Attachment = @Attachment
+         WHERE PostID    = @PostID";
+            MySqlParameter[] parameters = {
+                new MySqlParameter("Attachment",  attachmentName),
+                new MySqlParameter("PostID",        postId)
+            };
+            var dbResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+
+            if (!dbResponse.Succeeded)
+            {
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message   = "Database update failed."
+                };
+            }
+
+            // 4) Return
             return new ApiResponse
             {
-                Succeeded = true,
-                Parameters =
-                {
-                    ["AttachmentName"] = attachmentName
-                }
+                Succeeded  = true,
+                Parameters = { ["AttachmentName"] = attachmentName }
             };
         }
+
 
         #region Posts
 
