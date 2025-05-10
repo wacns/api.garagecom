@@ -102,6 +102,24 @@ namespace api.garagecom.Controllers
                     Succeeded = false,
                     Message = "Invalid request: you must set exactly one of isComment or isPost to true."
                 };
+            if (userId == -1)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid request: user ID is not set."
+                };
+            if (itemId <= 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid request: item ID is not set."
+                };
+            if (isComment && isPost)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid request: you must set exactly one of isComment or isPost to true."
+                };
 
             // 3. Build common parameter list
             var parameters = new[]
@@ -171,8 +189,10 @@ namespace api.garagecom.Controllers
         #region Attachments
 
         [HttpGet("GetUserAvatarByUserId")]
-        public async Task<FileResult> GetUserAvatarByUserId(int userId)
+        public async Task<FileResult?> GetUserAvatarByUserId(int userId)
         {
+            if (userId <= 0)
+                return null;
             var sql = @"SELECT U.Avatar FROM Garagecom.Users U WHERE U.UserID = @UserID";
             MySqlParameter[] parameters =
             {
@@ -184,8 +204,11 @@ namespace api.garagecom.Controllers
         }
 
         [HttpGet("GetPostAttachment")]
-        public async Task<FileResult> GetPostAttachment(string fileName)
+        public async Task<FileResult?> GetPostAttachment(string fileName)
         {
+            if (string.IsNullOrEmpty(fileName))
+                return null;
+            fileName = fileName.SanitizeFileName();
             var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Posts/");
             return File(file, "application/octet-stream", fileName);
         }
@@ -195,8 +218,29 @@ namespace api.garagecom.Controllers
             [FromForm] int postId,
             [FromForm] IFormFile file)
         {
+            if (postId <= 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid request: post ID is not set."
+                };
+            var sql = @"SELECT PostID FROM Garagecom.Posts P WHERE P.PostID = @PostID";
+            MySqlParameter[] parameters =
+            {
+                new("PostID", postId)
+            };
+            var postCount = Convert.ToInt32(
+                DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+            );
+            if (postCount == 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = $"No post found with ID = {postId}."
+                };
+
             // 1) Validate
-            if (file == null || file.Length == 0)
+            if (file.Length == 0)
                 return new ApiResponse
                 {
                     Succeeded = false,
@@ -228,15 +272,15 @@ namespace api.garagecom.Controllers
                 };
 
             // 3) Persist the new key in your Posts table
-            var sql = @"
+            sql = @"
         UPDATE Posts
            SET Attachment = @Attachment
          WHERE PostID    = @PostID";
-            MySqlParameter[] parameters =
-            {
-                new("Attachment", attachmentName),
-                new("PostID", postId)
-            };
+            parameters =
+            [
+                new MySqlParameter("Attachment", attachmentName),
+                new MySqlParameter("PostID", postId)
+            ];
             var dbResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
 
             if (!dbResponse.Succeeded)
@@ -811,24 +855,69 @@ UPDATE Posts
         #region Comments
 
         [HttpPost("SetComment")]
-        public ApiResponse SetComment(int postId, string text)
+        public async Task<ApiResponse> SetComment(int postId, string text)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                if (postId <= 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Post not found";
+                    return apiResponse;
+                }
+
+                if (string.IsNullOrEmpty(text))
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Comment is empty";
+                    return apiResponse;
+                }
+
+                text = text.SanitizeFileName();
+                var sql = @"SELECT COUNT(*) FROM Garagecom.Posts P WHERE P.PostID = @PostID";
+                MySqlParameter[] parameters =
+                {
+                    new("PostID", postId)
+                };
+                var postCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (postCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = $"No post found with ID = {postId}.";
+                    return apiResponse;
+                }
+
+                var validate = await AiHelper.ValidateUserText(text);
+                if (!validate)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Make sure your comment contains appropriate and useful content.";
+                    return apiResponse;
+                }
+
+                sql = @"
 SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
 INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID)
                             VALUES (@UserID, @PostID, @Text, NOW(), @StatusID)";
-                MySqlParameter[] parameters =
+                parameters =
                 [
-                    new("UserID", userId),
-                    new("PostID", postId),
-                    new("Text", text),
-                    new("Status", "Active")
+                    new MySqlParameter("UserID", userId),
+                    new MySqlParameter("PostID", postId),
+                    new MySqlParameter("Text", text),
+                    new MySqlParameter("Status", "Active")
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
                 var task = new Task(() =>
@@ -875,19 +964,50 @@ INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID)
         }
 
         [HttpPost("UpdateComment")]
-        public ApiResponse UpdateComment(int commentId, string text)
+        public async Task<ApiResponse> UpdateComment(int commentId, string text)
         {
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"UPDATE Comments
+                if (string.IsNullOrEmpty(text))
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Comment is empty";
+                    return apiResponse;
+                }
+
+                text = text.SanitizeFileName();
+                var sql = @"SELECT COUNT(*) FROM Garagecom.Comments C WHERE C.CommentID = @CommentID";
+                MySqlParameter[] parameters =
+                {
+                    new("CommentID", commentId)
+                };
+                var commentCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (commentCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = $"No comment found with ID = {commentId}.";
+                    return apiResponse;
+                }
+
+                var validate = await AiHelper.ValidateUserText(text);
+                if (!validate)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Make sure your comment contains appropriate and useful content.";
+                    return apiResponse;
+                }
+
+                sql = @"UPDATE Comments
                             SET Text = @Text,
                                 ModifiedIn = NOW()
                             WHERE CommentID = @CommentID";
-                MySqlParameter[] parameters =
+                parameters =
                 [
-                    new("CommentID", commentId),
-                    new("Text", text)
+                    new MySqlParameter("CommentID", commentId),
+                    new MySqlParameter("Text", text)
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -903,10 +1023,40 @@ INSERT INTO Comments (UserID, PostID, Text, CreatedIn, StatusID)
         [HttpPost("DeleteComment")]
         public ApiResponse DeleteComment(int commentId)
         {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                if (commentId <= 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Comment not found";
+                    return apiResponse;
+                }
+
+                var sql = @"SELECT COUNT(*) FROM Garagecom.Comments C WHERE C.CommentID = @CommentID";
+                MySqlParameter[] parameters =
+                {
+                    new("CommentID", commentId)
+                };
+                var commentCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (commentCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = $"No comment found with ID = {commentId}.";
+                    return apiResponse;
+                }
+
+                sql = @"
 SELECT StatusID INTO @StatusID
 FROM Statuses S
 WHERE S.Status = @Status;
@@ -914,10 +1064,10 @@ UPDATE Comments
                             SET StatusID = @StatusID,
                                 ModifiedIn = NOW()
                             WHERE CommentID = @CommentID";
-                MySqlParameter[] parameters =
+                parameters =
                 [
-                    new("CommentID", commentId),
-                    new("Status", "InActive")
+                    new MySqlParameter("CommentID", commentId),
+                    new MySqlParameter("Status", "InActive")
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -933,11 +1083,41 @@ UPDATE Comments
         [HttpGet("GetCommentsByPostId")]
         public ApiResponse GetCommentsByPostId(int postId, int page)
         {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                if (postId <= 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Post not found";
+                    return apiResponse;
+                }
+
+                var sql = @"SELECT COUNT(*) FROM Garagecom.Posts P WHERE P.PostID = @PostID";
+                MySqlParameter[] parameters =
+                {
+                    new("PostID", postId)
+                };
+                var postCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (postCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = $"No post found with ID = {postId}.";
+                    return apiResponse;
+                }
+
                 var comments = new List<Comment>();
-                var sql =
+                sql =
                     @"SELECT CommentID, Comments.UserID, Users.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
                             FROM Comments
                                 INNER JOIN Users ON Users.UserID = Comments.UserID
@@ -946,11 +1126,11 @@ UPDATE Comments
                             INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
                             WHERE SC.Status != 'Deleted' AND SP.Status = 'Deleted' ORDER BY Comments.CreatedIn LIMIT @Offset, @PageSize;";
                 var offset = ((page == 0 ? 1 : page) - 1) * PageSize;
-                MySqlParameter[] parameters =
+                parameters =
                 [
-                    new("PostID", postId),
-                    new("Offset", offset),
-                    new("PageSize", PageSize)
+                    new MySqlParameter("PostID", postId),
+                    new MySqlParameter("Offset", offset),
+                    new MySqlParameter("PageSize", PageSize)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
@@ -995,11 +1175,41 @@ WHERE
         [HttpGet("GetCommentByCommentID")]
         public ApiResponse GetCommentByCommentId(int commentId)
         {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                if (commentId <= 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Comment not found";
+                    return apiResponse;
+                }
+
+                var sql = @"SELECT COUNT(*) FROM Garagecom.Comments C WHERE C.CommentID = @CommentID";
+                MySqlParameter[] parameters =
+                {
+                    new("CommentID", commentId)
+                };
+                var commentCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (commentCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = $"No comment found with ID = {commentId}.";
+                    return apiResponse;
+                }
+
                 var comment = new Comment();
-                var sql =
+                sql =
                     @"SELECT CommentID, Comments.UserID, Users.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn, Comments.PostID
                             FROM Comments
                             INNER JOIN Users ON Users.UserID = Comments.UserID
@@ -1007,9 +1217,9 @@ WHERE
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
                             INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
                             WHERE SC.Status = 'Deleted' AND SP.Status = 'Deleted' AND CommentID = @CommentID";
-                MySqlParameter[] parameters =
+                parameters =
                 [
-                    new("CommentID", commentId)
+                    new MySqlParameter("CommentID", commentId)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
@@ -1053,14 +1263,67 @@ WHERE
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'Active';
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                if (postId <= 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Post not found";
+                    return apiResponse;
+                }
+
+                if (value != 1 && value != -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Vote value is invalid";
+                    return apiResponse;
+                }
+
+                var sql = @"SELECT COUNT(*) FROM Garagecom.Posts P WHERE P.PostID = @PostID";
+                MySqlParameter[] parameters =
+                {
+                    new("PostID", postId)
+                };
+                var postCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (postCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = $"No post found with ID = {postId}.";
+                    return apiResponse;
+                }
+
+                sql =
+                    @"SELECT COUNT(*) FROM Garagecom.Votes V WHERE V.UserID = @UserID AND V.PostID = @PostID AND V.StatusID = (SELECT S.StatusID FROM Garagecom.Statuses S WHERE S.Status = 'Active')";
+                parameters =
+                [
+                    new MySqlParameter("UserID", userId),
+                    new MySqlParameter("PostID", postId)
+                ];
+                var voteCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (voteCount > 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "You have already voted for the post.";
+                    return apiResponse;
+                }
+
+                sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'Active';
                         INSERT INTO Votes (UserID, PostID, CreatedIn, Value, StatusID)
                             VALUES (@UserID, @PostID, NOW(), @UpVote, @StatusID)";
-                MySqlParameter[] parameters =
+                parameters =
                 [
-                    new("UserID", userId),
-                    new("PostID", postId),
-                    new("UpVote", value)
+                    new MySqlParameter("UserID", userId),
+                    new MySqlParameter("PostID", postId),
+                    new MySqlParameter("UpVote", value)
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -1080,15 +1343,61 @@ WHERE
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'InActive';
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                if (postId <= 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Post not found";
+                    return apiResponse;
+                }
+
+                var sql = @"SELECT COUNT(*) FROM Garagecom.Posts P WHERE P.PostID = @PostID";
+                MySqlParameter[] parameters =
+                {
+                    new("PostID", postId)
+                };
+                var postCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (postCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = $"No post found with ID = {postId}.";
+                    return apiResponse;
+                }
+
+                sql =
+                    @"SELECT COUNT(*) FROM Garagecom.Votes V WHERE V.UserID = @UserID AND V.PostID = @PostID AND V.StatusID = (SELECT S.StatusID FROM Garagecom.Statuses S WHERE S.Status = 'Active')";
+                parameters =
+                [
+                    new MySqlParameter("UserID", userId),
+                    new MySqlParameter("PostID", postId)
+                ];
+                var voteCount = Convert.ToInt32(
+                    DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString()
+                );
+                if (voteCount == 0)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "No vote found for the post.";
+                    return apiResponse;
+                }
+
+                sql = @"SELECT StatusID INTO @StatusID FROM Statuses S WHERE S.Status = 'InActive';
                         UPDATE Votes
                             SET StatusID = @StatusID,
                                 ModifiedIn = NOW()
                             WHERE UserID = @UserID AND PostID = @PostID;";
-                MySqlParameter[] parameters =
+                parameters =
                 [
-                    new("UserID", userId),
-                    new("PostID", postId)
+                    new MySqlParameter("UserID", userId),
+                    new MySqlParameter("PostID", postId)
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }

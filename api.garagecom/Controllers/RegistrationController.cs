@@ -21,6 +21,12 @@ public class RegistrationController : Controller
         string lastName, string phoneNumber)
     {
         var apiResponse = new ApiResponse();
+        userName = userName.SanitizeFileName();
+        email = email.SanitizeFileName();
+        password = password.SanitizeFileName();
+        firstName = firstName.SanitizeFileName();
+        lastName = lastName.SanitizeFileName();
+        phoneNumber = phoneNumber.SanitizeFileName();
         if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) ||
             string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) || phoneNumber.Length != 8)
         {
@@ -139,8 +145,11 @@ public class RegistrationController : Controller
     }
 
     [HttpPost("login")]
+    [Obsolete("Obsolete")]
     public ApiResponse Login(string userName, string password)
     {
+        userName = userName.SanitizeFileName();
+        password = password.SanitizeFileName();
         var apiResponse = new ApiResponse();
         if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(password))
         {

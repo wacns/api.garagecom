@@ -1,5 +1,6 @@
 ﻿#region
 
+using System.Text.RegularExpressions;
 using api.garagecom.Filters;
 using api.garagecom.Utils;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,13 @@ namespace api.garagecom.Controllers
             var apiResponse = new ApiResponse();
             try
             {
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
                 var user = new User();
                 var sql =
                     @"SELECT UserID, UserName, FirstName, LastName, Email, Mobile, GI.Avatar FROM Users GI WHERE UserID = @UserID";
@@ -79,14 +87,62 @@ namespace api.garagecom.Controllers
             var apiResponse = new ApiResponse();
             try
             {
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                firstName = firstName.SanitizeFileName();
+                lastName = lastName.SanitizeFileName();
+                phoneNumber = phoneNumber.SanitizeFileName();
+                if (string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName) ||
+                    string.IsNullOrEmpty(phoneNumber))
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "First name, last name or phone number is empty";
+                    return apiResponse;
+                }
+
+                if (phoneNumber.Length != 8)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Phone number is too short";
+                    return apiResponse;
+                }
+
+                var phoneNumberPattern = "^[1-9][0-9]{7}$";
+                if (!Regex.IsMatch(phoneNumber, phoneNumberPattern))
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Phone number is invalid";
+                    return apiResponse;
+                }
+
                 var sql =
-                    @"UPDATE Users SET FirstName = @FirstName, LastName = @LastName, Mobile = @PhoneNumber WHERE UserID = @UserID";
+                    @"SELECT UserID FROM Users WHERE UserID = @UserID";
                 MySqlParameter[] parameters =
                 [
-                    new("FirstName", firstName),
-                    new("LastName", lastName),
-                    new("PhoneNumber", phoneNumber),
                     new("UserID", userId)
+                ];
+                var user = int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                                     string.Empty);
+                if (user == userId)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                sql =
+                    @"UPDATE Users SET FirstName = @FirstName, LastName = @LastName, Mobile = @PhoneNumber WHERE UserID = @UserID";
+                parameters =
+                [
+                    new MySqlParameter("FirstName", firstName),
+                    new MySqlParameter("LastName", lastName),
+                    new MySqlParameter("PhoneNumber", phoneNumber),
+                    new MySqlParameter("UserID", userId)
                 ];
                 DatabaseHelper.ExecuteNonQuery(sql, parameters);
                 apiResponse.Succeeded = true;
@@ -101,8 +157,11 @@ namespace api.garagecom.Controllers
         }
 
         [HttpGet("GetAvatarAttachment")]
-        public async Task<FileResult> GetAvatarAttachment(string fileName)
+        public async Task<FileResult?> GetAvatarAttachment(string fileName)
         {
+            fileName = fileName.SanitizeFileName();
+            if (string.IsNullOrEmpty(fileName))
+                return null;
             var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Avatars/");
             return File(file, "application/octet-stream", fileName);
         }
@@ -112,6 +171,26 @@ namespace api.garagecom.Controllers
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var attachmentName = $"{userId}_{Guid.NewGuid().ToString()}";
+            if (file.Length == 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "File is empty"
+                };
+            if (file.Length > 1048576)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "File size is too large"
+                };
+
+            if (userId == -1)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "User not found"
+                };
+            attachmentName = attachmentName.SanitizeFileName();
             var task = new Task(async void () =>
             {
                 var status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Avatars/");
@@ -145,11 +224,33 @@ namespace api.garagecom.Controllers
             var apiResponse = new ApiResponse();
             try
             {
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
                 var sql =
-                    @"UPDATE Users SET Avatar = null WHERE UserID = @UserID";
+                    @"SELECT Avatar FROM Users WHERE UserID = @UserID";
                 MySqlParameter[] parameters =
                 [
                     new("UserID", userId)
+                ];
+                var attachmentName = DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString();
+                if (string.IsNullOrEmpty(attachmentName))
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Avatar not found";
+                    return apiResponse;
+                }
+                // var status = S3Helper.DeleteAttachment(attachmentName, "Images/Avatars/");
+
+                sql =
+                    @"UPDATE Users SET Avatar = null WHERE UserID = @UserID";
+                parameters =
+                [
+                    new MySqlParameter("UserID", userId)
                 ];
                 DatabaseHelper.ExecuteNonQuery(sql, parameters);
                 apiResponse.Succeeded = true;
@@ -168,6 +269,13 @@ namespace api.garagecom.Controllers
         public ApiResponse Logout()
         {
             var userId = HttpContext.Items["UserID"] as int? ?? -1;
+            if (userId == -1)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "User not found"
+                };
+            var apiResponse = new ApiResponse();
 
             var sql =
                 @"UPDATE Logins SET Logins.LastToken = null WHERE UserID = @UserID ORDER BY Logins.CreatedIn DESC LIMIT 1;";
@@ -175,7 +283,7 @@ namespace api.garagecom.Controllers
             [
                 new("UserID", userId)
             ];
-            var apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             if (!apiResponse.Succeeded)
             {
                 apiResponse.Succeeded = false;

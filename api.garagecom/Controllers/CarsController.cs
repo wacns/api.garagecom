@@ -300,18 +300,65 @@ WHERE cp.CarID = @cid AND s.Status = 'Active'";
         [HttpPost("UpdateUserCar")]
         public ApiResponse UpdateUserCar(int carId, string? nickname, int? kilos, int? year)
         {
+            nickname = nickname?.SanitizeFileName();
+            if (year == null || year < 1900 || year > DateTime.Now.Year)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid year"
+                };
+            if (kilos != null && kilos < 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid kilos"
+                };
+            if (string.IsNullOrEmpty(nickname) || nickname.Length == 0)
+                nickname = string.Empty;
+            if (nickname.Length > 50)
+                nickname = nickname[..50];
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            if (userId == -1)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "User not found"
+                };
+            if (carId <= 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid car ID"
+                };
+            var sql =
+                @"SELECT UserID FROM Cars WHERE CarID = @cid AND UserID = @uid";
+            MySqlParameter[] parameters =
+            {
+                new("cid", carId),
+                new("uid", userId)
+            };
+            var userIdFromDb =
+                int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                          string.Empty);
+            if (userIdFromDb != userId)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Car not found"
+                };
             var apiResponse = new ApiResponse();
             try
             {
-                var sql =
+                sql =
                     @"UPDATE Cars SET Nickname = IFNULL(@nick, Nickname), Kilos = IFNULL(@kilos, Kilos), Year = IFNULL(@y, Year) WHERE CarID = @cid";
-                MySqlParameter[] parameters =
-                {
-                    new("nick", nickname),
-                    new("kilos", kilos),
-                    new("y", year),
-                    new("cid", carId)
-                };
+                parameters =
+                [
+                    new MySqlParameter("uid", userId),
+                    new MySqlParameter("nick", nickname),
+                    new MySqlParameter("kilos", kilos),
+                    new MySqlParameter("y", year),
+                    new MySqlParameter("cid", carId)
+                ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception e)
@@ -324,24 +371,67 @@ WHERE cp.CarID = @cid AND s.Status = 'Active'";
         }
 
         [HttpPost("SetCar")]
-        public ApiResponse SetCar(int ModelID, string? nickname, int? kilos, int year)
+        public ApiResponse SetCar(int modelId, string? nickname, int? kilos, int year)
         {
             var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                var sql =
-                    @"SELECT StatusID INTO @StatusID
-FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (ModelID, UserID, Nickname, Kilos, Year, CreatedIn, StatusID) VALUES (@cmid, @uid, @nick, @kilos, @y, NOW(), @StatusID)";
+                nickname = nickname?.SanitizeFileName();
+                if (year < 1900 || year > DateTime.Now.Year)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Invalid year"
+                    };
+                if (kilos != null && kilos < 0)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Invalid kilos"
+                    };
+                if (string.IsNullOrEmpty(nickname) || nickname.Length == 0)
+                    nickname = string.Empty;
+                if (nickname.Length > 50)
+                    nickname = nickname[..50];
+                if (userId == -1)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "User not found"
+                    };
+                if (modelId <= 0)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Invalid model ID"
+                    };
+                var sql = @"SELECT ModelID FROM Models WHERE ModelID = @mid";
                 MySqlParameter[] parameters =
                 {
-                    new("cmid", ModelID),
-                    new("uid", userId),
-                    new("nick", nickname),
-                    new("kilos", kilos),
-                    new("y", year),
-                    new("StatusName", "Active")
+                    new("mid", modelId)
                 };
+                var modelIdFromDb =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
+                if (modelIdFromDb != modelId)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Model not found"
+                    };
+                sql =
+                    @"SELECT StatusID INTO @StatusID
+FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (ModelID, UserID, Nickname, Kilos, Year, CreatedIn, StatusID) VALUES (@cmid, @uid, @nick, @kilos, @y, NOW(), @StatusID)";
+                parameters =
+                [
+                    new MySqlParameter("cmid", modelId),
+                    new MySqlParameter("uid", userId),
+                    new MySqlParameter("nick", nickname),
+                    new MySqlParameter("kilos", kilos),
+                    new MySqlParameter("y", year),
+                    new MySqlParameter("StatusName", "Active")
+                ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception e)
@@ -356,16 +446,38 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (ModelID, UserID, Ni
         [HttpPost("DeleteCar")]
         public ApiResponse DeleteCar(int carId)
         {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                var sql =
-                    @"UPDATE Cars SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarID = @cid";
+                if (carId <= 0)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Invalid car ID"
+                    };
+                var sql = @"SELECT UserID FROM Cars WHERE CarID = @cid AND UserID = @uid";
                 MySqlParameter[] parameters =
                 {
-                    new("st", "Inactive"),
-                    new("cid", carId)
+                    new("cid", carId),
+                    new("uid", userId)
                 };
+                var userIdFromDb =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
+                if (userIdFromDb != userId)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Car not found"
+                    };
+                sql =
+                    @"UPDATE Cars SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarID = @cid";
+                parameters =
+                [
+                    new MySqlParameter("st", "Inactive"),
+                    new MySqlParameter("cid", carId)
+                ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception e)
@@ -385,6 +497,24 @@ FROM Statuses WHERE Status = @StatusName ; INSERT INTO Cars (ModelID, UserID, Ni
         public ApiResponse SetCarPart(int carId, int partId, int lifeTimeInterval, DateOnly lastReplacementDate,
             string? notes)
         {
+            notes = notes?.SanitizeFileName();
+            if (carId <= 0 || partId <= 0 || lifeTimeInterval <= 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid parameters"
+                };
+            if (lastReplacementDate == DateOnly.MinValue || lastReplacementDate == DateOnly.MaxValue ||
+                lastReplacementDate == DateOnly.FromDateTime(DateTime.MinValue))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid last replacement date"
+                };
+            if (string.IsNullOrEmpty(notes) || notes.Length == 0)
+                notes = string.Empty;
+            if (notes.Length > 255)
+                notes = notes[..255];
             var r = new ApiResponse();
             try
             {
@@ -412,9 +542,28 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
         }
 
         [HttpPost("UpdateCarPart")]
-        public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, DateTime lastReplacementDate,
+        public ApiResponse UpdateCarPart(int carPartId, int lifeTimeInterval, DateOnly lastReplacementDate,
             string? notes)
         {
+            notes = notes?.SanitizeFileName();
+            if (lifeTimeInterval <= 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid parameters"
+                };
+            if (lastReplacementDate == DateOnly.MinValue || lastReplacementDate == DateOnly.MaxValue ||
+                lastReplacementDate == DateOnly.FromDateTime(DateTime.MinValue))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Invalid last replacement date"
+                };
+            if (string.IsNullOrEmpty(notes) || notes.Length == 0)
+                notes = string.Empty;
+            if (notes.Length > 255)
+                notes = notes[..255];
+
             var r = new ApiResponse();
             try
             {
@@ -442,16 +591,52 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
         [HttpPost("DeleteCarPart")]
         public ApiResponse DeleteCarPart(int carPartId)
         {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var apiResponse = new ApiResponse();
             try
             {
-                var sql =
-                    @"UPDATE CarParts SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarPartID = @cpid";
+                if (carPartId <= 0)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Invalid car part ID"
+                    };
+                var sql = @"SELECT CarID FROM CarParts WHERE CarPartID = @cpid";
                 MySqlParameter[] parameters =
                 {
-                    new("st", "InActive"),
                     new("cpid", carPartId)
                 };
+                var carIdFromDb =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
+                if (carIdFromDb == -1)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Car part not found"
+                    };
+                sql = @"SELECT UserID FROM Cars WHERE CarID = @cid AND UserID = @uid";
+                parameters =
+                [
+                    new MySqlParameter("cid", carIdFromDb),
+                    new MySqlParameter("uid", userId)
+                ];
+                var userIdFromDb =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
+                if (userIdFromDb != userId)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Car part not found"
+                    };
+                sql =
+                    @"UPDATE CarParts SET StatusID = (SELECT StatusID FROM Statuses WHERE Status = @st) WHERE CarPartID = @cpid";
+                parameters =
+                [
+                    new MySqlParameter("st", "InActive"),
+                    new MySqlParameter("cpid", carPartId)
+                ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
             catch (Exception e)
@@ -466,10 +651,46 @@ INSERT INTO CarParts (CarID, PartID, LifeTimeInterval, CreatedIn, Notes, StatusI
         [HttpPost("RenewCarPart")]
         public ApiResponse RenewCarPart(int carPartId)
         {
+            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             var r = new ApiResponse();
             try
             {
-                var sql = @"INSERT INTO CarPartsRenewal (CarPartID, CreatedIn) VALUES (@cpid, NOW());
+                if (carPartId <= 0)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Invalid car part ID"
+                    };
+                var sql = @"SELECT CarID FROM CarParts WHERE CarPartID = @cpid";
+                MySqlParameter[] parameters =
+                {
+                    new("cpid", carPartId)
+                };
+                var carIdFromDb =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
+                if (carIdFromDb == -1)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Car part not found"
+                    };
+                sql = @"SELECT UserID FROM Cars WHERE CarID = @cid AND UserID = @uid";
+                parameters =
+                [
+                    new MySqlParameter("cid", carIdFromDb),
+                    new MySqlParameter("uid", userId)
+                ];
+                var userIdFromDb =
+                    int.Parse(DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString() ??
+                              string.Empty);
+                if (userIdFromDb != userId)
+                    return new ApiResponse
+                    {
+                        Succeeded = false,
+                        Message = "Car part not found"
+                    };
+                sql = @"INSERT INTO CarPartsRenewal (CarPartID, CreatedIn) VALUES (@cpid, NOW());
 -- UPDATE CarParts SET CreatedIn = NOW() WHERE CarPartID = @cpid";
                 var ps = new[] { new MySqlParameter("cpid", carPartId) };
                 r = DatabaseHelper.ExecuteNonQuery(sql, ps);

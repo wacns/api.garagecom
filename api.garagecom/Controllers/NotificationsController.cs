@@ -16,6 +16,13 @@ public class NotificationsController : Controller
     [HttpPost("SetDeviceToken")]
     public ApiResponse SetDeviceToken(string deviceToken)
     {
+        if (string.IsNullOrEmpty(deviceToken))
+            return new ApiResponse
+            {
+                Succeeded = false,
+                Message = "Device token is empty"
+            };
+        deviceToken = deviceToken.SanitizeFileName();
         var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
         var apiResponse = new ApiResponse();
         try

@@ -14,8 +14,13 @@ namespace api.garagecom.Controllers;
 public class DashboardController : Controller
 {
     [HttpGet("GetDashboardSignAttachment")]
-    public async Task<FileResult> GetDashboardSignAttachment(string fileName)
+    public async Task<FileResult?> GetDashboardSignAttachment(string fileName)
     {
+        if (string.IsNullOrEmpty(fileName))
+            return null;
+        fileName = fileName.Trim();
+        fileName = fileName.SanitizeFileName();
+
         var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/DashboardSigns/");
         return File(file, "application/octet-stream", fileName);
     }
@@ -24,6 +29,20 @@ public class DashboardController : Controller
     public async Task<ApiResponse> GetDashboardSigns([FromForm] IFormFile file)
     {
         var apiResponse = new ApiResponse();
+        if (file.Length == 0)
+        {
+            apiResponse.Succeeded = false;
+            apiResponse.Message = "File is empty";
+            return apiResponse;
+        }
+
+        if (file.Length > 1048576)
+        {
+            apiResponse.Succeeded = false;
+            apiResponse.Message = "File size is too large";
+            return apiResponse;
+        }
+
         var defects = await AiHelper.GetDashboardSigns(file);
         var defectsList = new List<Defects>();
         try

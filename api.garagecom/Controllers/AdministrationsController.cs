@@ -1,5 +1,6 @@
 ﻿#region
 
+using System.Text.RegularExpressions;
 using api.garagecom.Filters;
 using api.garagecom.Utils;
 using Microsoft.AspNetCore.Mvc;
@@ -82,6 +83,31 @@ LIMIT 1;
         [HttpPost("ProcessReport")]
         public async Task<ApiResponse> ProcessReport(string action, int? commentId = null, int? postId = null)
         {
+            action = action.SanitizeFileName();
+            if (string.IsNullOrEmpty(action))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide action"
+                };
+            if (action != "block" && action != "allow")
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide valid action"
+                };
+            if (commentId == null && postId == null)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide PostID or CommentID"
+                };
+            if (commentId != null && postId != null)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide only PostID or CommentID"
+                };
             var apiResponse = new ApiResponse();
             var actionUserId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
             try
@@ -175,13 +201,46 @@ LIMIT 1;
         [HttpPost("SetPart")]
         public ApiResponse SetPart(string partName)
         {
+            partName = partName.SanitizeFileName();
+            if (string.IsNullOrEmpty(partName))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide part name"
+                };
+            if (partName.Length < 3)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Part name must be at least 3 characters long"
+                };
+            if (partName.Length > 50)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Part name must be at most 50 characters long"
+                };
+            var pattern = "[^a-zA-Z0-9_.]";
+            var matches = Regex.Matches(partName, pattern);
+            if (matches.Count > 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Part name can only contain letters, numbers, underscores and dots"
+                };
+            if (partName.Contains("  "))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Part name cannot contain multiple spaces"
+                };
             var apiResponse = new ApiResponse();
             try
             {
                 var sql = @"INSERT INTO Parts (PartName) VALUES (@PartName);";
                 MySqlParameter[] parameters =
                 [
-                    new("PartName", partName)
+                    new("PartName", partName.Trim())
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -197,13 +256,46 @@ LIMIT 1;
         [HttpPost("SetBrand")]
         public ApiResponse SetBrand(string brandName)
         {
+            brandName = brandName.SanitizeFileName();
+            if (string.IsNullOrEmpty(brandName))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide brand name"
+                };
+            if (brandName.Length < 3)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Brand name must be at least 3 characters long"
+                };
+            if (brandName.Length > 50)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Brand name must be at most 50 characters long"
+                };
+            var pattern = "[^a-zA-Z0-9_.]";
+            var matches = Regex.Matches(brandName, pattern);
+            if (matches.Count > 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Brand name can only contain letters, numbers, underscores and dots"
+                };
+            if (brandName.Contains("  "))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Brand name cannot contain multiple spaces"
+                };
             var apiResponse = new ApiResponse();
             try
             {
                 var sql = @"INSERT INTO Brands (BrandName) VALUES (@BrandName);";
                 MySqlParameter[] parameters =
                 [
-                    new("BrandName", brandName)
+                    new("BrandName", brandName.Trim())
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
@@ -219,14 +311,65 @@ LIMIT 1;
         [HttpPost("SetModel")]
         public ApiResponse SetModel(string modelName, int brandId)
         {
+            modelName = modelName.SanitizeFileName();
+            if (string.IsNullOrEmpty(modelName))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide model name"
+                };
+            if (modelName.Length < 3)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Model name must be at least 3 characters long"
+                };
+            if (modelName.Length > 50)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Model name must be at most 50 characters long"
+                };
+            var pattern = "[^a-zA-Z0-9_.]";
+            var matches = Regex.Matches(modelName, pattern);
+            if (matches.Count > 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Model name can only contain letters, numbers, underscores and dots"
+                };
+            if (modelName.Contains("  "))
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Model name cannot contain multiple spaces"
+                };
+            if (brandId <= 0)
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Please provide valid brand ID"
+                };
+            var sql = "SELECT COUNT(*) FROM Brands WHERE BrandID = @BrandID;";
+            MySqlParameter[] parameters =
+            [
+                new("BrandID", brandId)
+            ];
+            var brandCount = DatabaseHelper.ExecuteScalar(sql, parameters);
+            if (brandCount.Parameters["Result"].ToString() == "0")
+                return new ApiResponse
+                {
+                    Succeeded = false,
+                    Message = "Brand ID does not exist"
+                };
             var apiResponse = new ApiResponse();
             try
             {
-                var sql = @"INSERT INTO Models (ModelName, BrandID) VALUES (@ModelName, @BrandID);";
-                MySqlParameter[] parameters =
+                sql = @"INSERT INTO Models (ModelName, BrandID) VALUES (@ModelName, @BrandID);";
+                parameters =
                 [
-                    new("ModelName", modelName),
-                    new("BrandID", brandId)
+                    new MySqlParameter("ModelName", modelName),
+                    new MySqlParameter("BrandID", brandId)
                 ];
                 apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
             }
