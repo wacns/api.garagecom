@@ -88,8 +88,8 @@ public class RegistrationController : Controller
             }
 
             sql =
-                @"INSERT INTO Users (UserName, Email, Password, FirstName, LastName, CreatedIn, Mobile)
-                    VALUES (@UserName, @Email, @Password, @FirstName, @LastName, NOW(), @PhoneNumber);
+                @"INSERT INTO Users (UserName, Email, Password, FirstName, LastName, CreatedIn, Mobile, RoleID)
+                    VALUES (@UserName, @Email, @Password, @FirstName, @LastName, NOW(), @PhoneNumber, 2);
                     SELECT LAST_INSERT_ID() AS UserID;
                     ";
             parameters =
@@ -122,7 +122,8 @@ public class RegistrationController : Controller
                 Parameters =
                 {
                     ["Token"] = token,
-                    ["UserID"] = userId
+                    ["UserID"] = userId,
+                    ["RoleName"] = "User"
                 },
                 Succeeded = true
             };
@@ -178,6 +179,7 @@ public class RegistrationController : Controller
             {
                 userId = reader["UserID"] == DBNull.Value ? -1 : Convert.ToInt32(reader["UserID"]);
                 email = reader["Email"].ToString()!;
+                roleName = reader["RoleName"].ToString()!;
             }
             else
             {
@@ -213,6 +215,7 @@ public class RegistrationController : Controller
 
         apiResponse.Parameters["Token"] = token;
         apiResponse.Parameters["UserID"] = userId;
+        apiResponse.Parameters["RoleName"] = roleName;
         apiResponse.Succeeded = true;
 
         return apiResponse;
