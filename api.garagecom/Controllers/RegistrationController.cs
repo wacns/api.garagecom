@@ -31,8 +31,8 @@ public class RegistrationController : Controller
 
         try
         {
-            var userNamePattern = "[^a-zA-Z0-9_.]";
-            var phoneNumberPattern = "^[0-9]{8}$";
+            var userNamePattern = "[^a-zA-Z0-9_.]{3,20}";
+            var phoneNumberPattern = "^[1-9][0-9]{7}$";
 
             var matches = Regex.Matches(userName, userNamePattern);
 
