@@ -22,7 +22,7 @@ public class RegistrationController : Controller
     {
         var apiResponse = new ApiResponse();
         userName = userName.SanitizeFileName();
-        email = email.SanitizeFileName();
+        // email = email.SanitizeFileName();
         password = password.SanitizeFileName();
         firstName = firstName.SanitizeFileName();
         lastName = lastName.SanitizeFileName();

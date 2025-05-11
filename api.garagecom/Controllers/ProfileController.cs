@@ -159,7 +159,7 @@ namespace api.garagecom.Controllers
         [HttpGet("GetAvatarAttachment")]
         public async Task<FileResult?> GetAvatarAttachment(string fileName)
         {
-            fileName = fileName.SanitizeFileName();
+            // fileName = fileName.SanitizeFileName();
             if (string.IsNullOrEmpty(fileName))
                 return null;
             var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Avatars/");

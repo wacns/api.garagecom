@@ -18,8 +18,8 @@ public class DashboardController : Controller
     {
         if (string.IsNullOrEmpty(fileName))
             return null;
-        fileName = fileName.Trim();
-        fileName = fileName.SanitizeFileName();
+        // fileName = fileName.Trim();
+        // fileName = fileName.SanitizeFileName();
 
         var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/DashboardSigns/");
         return File(file, "application/octet-stream", fileName);

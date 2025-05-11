@@ -208,7 +208,7 @@ namespace api.garagecom.Controllers
         {
             if (string.IsNullOrEmpty(fileName))
                 return null;
-            fileName = fileName.SanitizeFileName();
+            // fileName = fileName.SanitizeFileName();
             var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Posts/");
             return File(file, "application/octet-stream", fileName);
         }
@@ -882,7 +882,7 @@ UPDATE Posts
                     return apiResponse;
                 }
 
-                text = text.SanitizeFileName();
+                // text = text.SanitizeFileName();
                 var sql = @"SELECT COUNT(*) FROM Garagecom.Posts P WHERE P.PostID = @PostID";
                 MySqlParameter[] parameters =
                 {
