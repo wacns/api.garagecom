@@ -14,10 +14,10 @@ namespace api.garagecom.Controllers;
 public class DashboardController : Controller
 {
     [HttpGet("GetDashboardSignAttachment")]
-    public async Task<FileResult?> GetDashboardSignAttachment(string fileName)
+    public async Task<ActionResult> GetDashboardSignAttachment(string fileName)
     {
-        if (string.IsNullOrEmpty(fileName))
-            return null;
+        if (string.IsNullOrEmpty(fileName) || string.IsNullOrWhiteSpace(fileName))
+            return NotFound();
         // fileName = fileName.Trim();
         // fileName = fileName.SanitizeFileName();
 

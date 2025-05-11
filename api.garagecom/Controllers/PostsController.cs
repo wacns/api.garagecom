@@ -189,25 +189,27 @@ namespace api.garagecom.Controllers
         #region Attachments
 
         [HttpGet("GetUserAvatarByUserId")]
-        public async Task<FileResult?> GetUserAvatarByUserId(int userId)
+        public async Task<ActionResult> GetUserAvatarByUserId(int userId)
         {
             if (userId <= 0)
-                return null;
+                return NotFound();
             var sql = @"SELECT U.Avatar FROM Garagecom.Users U WHERE U.UserID = @UserID";
             MySqlParameter[] parameters =
             {
                 new("UserID", userId)
             };
             var avatar = DatabaseHelper.ExecuteScalar(sql, parameters).Parameters["Result"].ToString();
+            if (string.IsNullOrEmpty(avatar) || string.IsNullOrWhiteSpace(avatar))
+                return NotFound();
             var file = await S3Helper.DownloadAttachmentAsync(avatar, "Images/Avatars/");
             return File(file, "application/octet-stream", avatar);
         }
 
         [HttpGet("GetPostAttachment")]
-        public async Task<FileResult?> GetPostAttachment(string fileName)
+        public async Task<ActionResult> GetPostAttachment(string fileName)
         {
-            if (string.IsNullOrEmpty(fileName))
-                return null;
+            if (string.IsNullOrEmpty(fileName) || string.IsNullOrWhiteSpace(fileName))
+                return NotFound();
             // fileName = fileName.SanitizeFileName();
             var file = await S3Helper.DownloadAttachmentAsync(fileName, "Images/Posts/");
             return File(file, "application/octet-stream", fileName);
@@ -347,8 +349,9 @@ namespace api.garagecom.Controllers
             try
             {
                 var posts = new List<Post>();
+                var offset = ((page == 0 ? 1 : page) - 1) * PageSize;
                 var sql =
-                    @"WITH VoteData AS (
+                    $@"WITH VoteData AS (
     SELECT
         PostID,
         SUM(Value) AS VoteCount,
@@ -400,13 +403,10 @@ FROM Posts P
                    ON CD.PostID = P.PostID
 WHERE
     P.UserID = @UserID AND P.StatusID != 3
-ORDER BY P.CreatedIn DESC LIMIT @Offset, @PageSize;";
-                var offset = ((page == 0 ? 1 : page) - 1) * PageSize;
+ORDER BY P.CreatedIn DESC LIMIT {offset}, {PageSize};";
                 MySqlParameter[] parameters =
                 [
                     new("UserID", userId),
-                    new("Offset", offset),
-                    new("PageSize", PageSize)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
@@ -593,8 +593,9 @@ WHERE
             try
             {
                 var posts = new List<Post>();
+                var offset = ((page == 0 ? 1 : page) - 1) * PageSize;
                 var sql =
-                    @"WITH VoteData AS (
+                    $@"WITH VoteData AS (
     SELECT
         PostID,
         SUM(Value) AS VoteCount,
@@ -647,14 +648,11 @@ FROM Posts P
 WHERE
     (@PostCategoryID = ''
         OR FIND_IN_SET(P.PostCategoryID, @PostCategoryID)) AND P.StatusID != 3
-ORDER BY P.CreatedIn DESC LIMIT @Offset, @PageSize;";
-                var offset = ((page == 0 ? 1 : page) - 1) * PageSize;
+ORDER BY P.CreatedIn DESC LIMIT {offset}, {PageSize};";
                 MySqlParameter[] parameters =
                 [
                     new("PostCategoryID", string.Join(",", categoryId)),
                     new("UserID", userId),
-                    new("Offset", offset),
-                    new("PageSize", PageSize)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
@@ -1117,20 +1115,19 @@ UPDATE Comments
                 }
 
                 var comments = new List<Comment>();
+                var offset = ((page == 0 ? 1 : page) - 1) * PageSize;
                 sql =
-                    @"SELECT CommentID, Comments.UserID, Users.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
+                    $@"SELECT CommentID, Comments.UserID, Users.UserName, Comments.PostID, Text, Comments.CreatedIn AS CreatedIn, Comments.ModifiedIn
                             FROM Comments
                                 INNER JOIN Users ON Users.UserID = Comments.UserID
                             INNER JOIN Posts ON Comments.PostID = Posts.PostID AND Posts.PostID = @PostID
                             INNER JOIN Statuses SC ON SC.StatusID = Comments.StatusID
                             INNER JOIN Statuses SP ON SP.StatusID = Posts.StatusID
-                            WHERE SC.Status != 'Deleted' AND SP.Status = 'Deleted' ORDER BY Comments.CreatedIn LIMIT @Offset, @PageSize;";
-                var offset = ((page == 0 ? 1 : page) - 1) * PageSize;
+                            WHERE SC.Status != 'Deleted' AND SP.Status != 'Deleted' ORDER BY Comments.CreatedIn LIMIT {offset}, {PageSize};";
+                
                 parameters =
                 [
                     new MySqlParameter("PostID", postId),
-                    new MySqlParameter("Offset", offset),
-                    new MySqlParameter("PageSize", PageSize)
                 ];
                 using (var reader = DatabaseHelper.ExecuteReader(sql, parameters))
                 {
