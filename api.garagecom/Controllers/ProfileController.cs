@@ -18,7 +18,6 @@ public class User
     public string LastName { get; set; }
     public string Email { get; set; }
     public string PhoneNumber { get; set; }
-    public string ProfilePicture { get; set; }
     public string AttachmentName { get; set; }
 }
 
@@ -167,53 +166,84 @@ namespace api.garagecom.Controllers
         }
 
         [HttpPost("SetAvatarAttachment")]
-        public ApiResponse SetAvatarAttachment(IFormFile file)
+        public async Task<ApiResponse> SetAvatarAttachment(IFormFile file)
         {
-            var userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
-            var attachmentName = $"{userId}_{Guid.NewGuid().ToString()}";
-            if (file.Length == 0)
-                return new ApiResponse
+            var apiResponse = new ApiResponse();
+
+            // 1. Validate user
+            var userId = HttpContext.Items["UserID"] as int? ?? -1;
+            if (userId == -1)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "User not found";
+                return apiResponse;
+            }
+
+            // 2. Validate file
+            if (file == null || file.Length == 0)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "File is empty";
+                return apiResponse;
+            }
+
+            if (file.Length > 10 * 1024 * 1024) // 10 MB limit
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "File size is too large";
+                return apiResponse;
+            }
+
+            // 3. Generate a safe filename
+            var attachmentName = $"{userId}_{Guid.NewGuid()}".SanitizeFileName();
+
+            // 4. Upload to S3
+            bool uploadOk;
+            try
+            {
+                uploadOk = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Avatars/");
+            }
+            catch (Exception ex)
+            {
+                // Log the exception if you have a logger
+                apiResponse.Succeeded = false;
+                apiResponse.Message = $"Upload failed: {ex.Message}";
+                return apiResponse;
+            }
+
+            if (!uploadOk)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Error uploading file to storage";
+                return apiResponse;
+            }
+
+            // 5. Update the database
+            try
+            {
+                const string sql = @"
+            UPDATE Users
+               SET Avatar = @Attachment
+             WHERE UserID = @UserID";
+
+                var parameters = new MySqlParameter[]
                 {
-                    Succeeded = false,
-                    Message = "File is empty"
-                };
-            if (file.Length > 1024.0 * 1024.0 * 10)
-                return new ApiResponse
-                {
-                    Succeeded = false,
-                    Message = "File size is too large"
+                    new MySqlParameter("Attachment", attachmentName),
+                    new MySqlParameter("UserID", userId)
                 };
 
-            if (userId == -1)
-                return new ApiResponse
-                {
-                    Succeeded = false,
-                    Message = "User not found"
-                };
-            attachmentName = attachmentName.SanitizeFileName();
-            var task = new Task(async void () =>
-            {
-                var status = await S3Helper.UploadAttachmentAsync(file, attachmentName, "Images/Avatars/");
-                if (!status) return;
-                var sql = @"UPDATE Users
-                            SET Avatar = @Attachment
-                            WHERE UserID = @UserID";
-                MySqlParameter[] parameters =
-                [
-                    new("Attachment", attachmentName),
-                    new("UserID", userId)
-                ];
                 DatabaseHelper.ExecuteNonQuery(sql, parameters);
-            });
-            task.Start();
-            return new ApiResponse
+
+                apiResponse.Succeeded = true;
+                apiResponse.Parameters["AttachmentName"] = attachmentName;
+                return apiResponse;
+            }
+            catch (Exception ex)
             {
-                Succeeded = true,
-                Parameters =
-                {
-                    ["AttachmentName"] = attachmentName
-                }
-            };
+                apiResponse.Succeeded = false;
+                apiResponse.Message = $"Database update failed: {ex.Message}";
+                return apiResponse;
+            }
         }
 
 
@@ -261,6 +291,42 @@ namespace api.garagecom.Controllers
                 throw;
             }
 
+            return apiResponse;
+        }
+
+        [HttpPost("SetDeviceToken")]
+        public ApiResponse SetDeviceToken(string deviceToken)
+        {
+            int userId = HttpContext.Items["UserID"] == null ? -1 : Convert.ToInt32(HttpContext.Items["UserID"]!);
+            var apiResponse = new ApiResponse();
+            try
+            {
+                if (userId == -1)
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "User not found";
+                    return apiResponse;
+                }
+
+                if (string.IsNullOrEmpty(deviceToken) || string.IsNullOrWhiteSpace(deviceToken))
+                {
+                    apiResponse.Succeeded = false;
+                    apiResponse.Message = "Device token is empty";
+                    return apiResponse;
+                }
+                var sql =
+                    @"UPDATE Logins SET DeviceToken = @DeviceToken WHERE UserID = @UserID AND DeviceToken IS NULL ORDER BY CreatedIn DESC LIMIT 1;";
+                MySqlParameter[] parameters =
+                [
+                    new("DeviceToken", deviceToken),
+                    new("UserID", userId)
+                ];
+                apiResponse = DatabaseHelper.ExecuteNonQuery(sql, parameters);
+            } catch (Exception e)
+            {
+                apiResponse.Succeeded = false;
+                apiResponse.Message = "Error setting device token";
+            }
             return apiResponse;
         }
 

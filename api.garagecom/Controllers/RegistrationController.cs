@@ -21,9 +21,9 @@ public class RegistrationController : Controller
         string lastName, string phoneNumber)
     {
         var apiResponse = new ApiResponse();
-        userName = userName.SanitizeFileName();
+        // userName = userName.SanitizeFileName();
         // email = email.SanitizeFileName();
-        password = password.SanitizeFileName();
+        // password = password.SanitizeFileName();
         firstName = firstName.SanitizeFileName();
         lastName = lastName.SanitizeFileName();
         phoneNumber = phoneNumber.SanitizeFileName();
