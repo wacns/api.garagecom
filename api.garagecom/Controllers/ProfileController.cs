@@ -177,7 +177,7 @@ namespace api.garagecom.Controllers
                     Succeeded = false,
                     Message = "File is empty"
                 };
-            if (file.Length > 1048576)
+            if (file.Length > 1024.0 * 1024.0 * 10)
                 return new ApiResponse
                 {
                     Succeeded = false,

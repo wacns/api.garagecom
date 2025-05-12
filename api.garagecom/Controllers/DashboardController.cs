@@ -36,7 +36,7 @@ public class DashboardController : Controller
             return apiResponse;
         }
 
-        if (file.Length > 1048576)
+        if (file.Length > 1024.0 * 1024.0 * 10)
         {
             apiResponse.Succeeded = false;
             apiResponse.Message = "File size is too large";
