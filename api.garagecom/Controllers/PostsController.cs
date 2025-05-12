@@ -90,13 +90,11 @@ namespace api.garagecom.Controllers
         [HttpPost("SetReport")]
         public ApiResponse SetReport(int itemId, bool isComment = false, bool isPost = false)
         {
-            // 1. Get the calling user’s ID
             var userId = HttpContext.Items["UserID"] == null
                 ? -1
                 : Convert.ToInt32(HttpContext.Items["UserID"]!);
 
-            // 2. Validate flags: exactly one must be true
-            if (!(isComment ^ isPost)) // XOR: true if exactly one of them is true
+            if (!(isComment ^ isPost))
                 return new ApiResponse
                 {
                     Succeeded = false,
@@ -120,8 +118,6 @@ namespace api.garagecom.Controllers
                     Succeeded = false,
                     Message = "Invalid request: you must set exactly one of isComment or isPost to true."
                 };
-
-            // 3. Build common parameter list
             var parameters = new[]
             {
                 new MySqlParameter("@UserID", userId),
@@ -151,9 +147,8 @@ namespace api.garagecom.Controllers
                 VALUES (@UserID, @ItemID);
             ";
                 }
-                else // isPost == true
+                else
                 {
-                    // 4b. (Optional) Verify post exists
                     const string checkPostSql = "SELECT COUNT(*) FROM posts WHERE PostID = @ItemID;";
                     var postCount = Convert.ToInt32(
                         DatabaseHelper.ExecuteScalar(checkPostSql, parameters).Parameters["Result"].ToString()
@@ -164,8 +159,6 @@ namespace api.garagecom.Controllers
                             Succeeded = false,
                             Message = $"No post found with ID = {itemId}."
                         };
-
-                    // 5b. Prepare INSERT for a post report
                     sql = @"
                 INSERT INTO Reports (ReportingUserID, PostID)
                 VALUES (@UserID, @ItemID);
@@ -320,15 +313,15 @@ namespace api.garagecom.Controllers
                         posts.Add(new SearchPostModel
                         {
                             PostID = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1,
-                            Title = reader["Title"]?.ToString() ?? "",
-                            Description = reader["Description"]?.ToString() ?? ""
+                            Title = (reader["Title"]?.ToString() ?? "")!.HtmlUnescape(),
+                            Description = (reader["Description"]?.ToString() ?? "")!.HtmlUnescape()
                         });
                 }
 
                 // Ensure indexing before search
                 SearchHelper.IndexPosts(posts);
 
-                var searchResults = SearchHelper.Search(posts, searchText);
+                var searchResults = SearchHelper.Search(posts, searchText.HtmlUnescape());
                 apiResponse.Parameters["Posts"] = searchResults;
                 apiResponse.Succeeded = true;
             }
@@ -418,11 +411,11 @@ ORDER BY P.CreatedIn DESC LIMIT {offset}, {PageSize};";
                                 ? Convert.ToInt32(reader["PostCategoryID"])
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
+                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!.HtmlUnescape(),
 
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             Description =
-                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!.HtmlUnescape(),
                             Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
@@ -436,7 +429,7 @@ ORDER BY P.CreatedIn DESC LIMIT {offset}, {PageSize};";
                                     : -1,
                                 Title = (reader["CategoryTitle"] != DBNull.Value
                                     ? reader["CategoryTitle"].ToString()
-                                    : "")!
+                                    : "")!.HtmlUnescape()
                             },
                             CountVotes = reader["VoteCount"] == DBNull.Value ? 0 : Convert.ToInt32(reader["VoteCount"]),
                             CountComments = reader["CommentCount"] == DBNull.Value
@@ -543,11 +536,11 @@ WHERE
                                 ? Convert.ToInt32(reader["PostCategoryID"])
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
+                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!.HtmlUnescape(),
 
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             Description =
-                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!.HtmlUnescape(),
                             Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
@@ -561,7 +554,7 @@ WHERE
                                     : -1,
                                 Title = (reader["CategoryTitle"] != DBNull.Value
                                     ? reader["CategoryTitle"].ToString()
-                                    : "")!
+                                    : "")!.HtmlUnescape()
                             },
                             CountVotes = reader["VoteCount"] == DBNull.Value ? 0 : Convert.ToInt32(reader["VoteCount"]),
                             CountComments = reader["CommentCount"] == DBNull.Value
@@ -664,11 +657,11 @@ ORDER BY P.CreatedIn DESC LIMIT {offset}, {PageSize};";
                                 ? Convert.ToInt32(reader["PostCategoryID"])
                                 : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
-                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!,
+                            Title = (reader["Title"] != DBNull.Value ? reader["Title"].ToString() : "")!.HtmlUnescape(),
 
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             Description =
-                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!,
+                                (reader["Description"] != DBNull.Value ? reader["Description"].ToString() : "")!.HtmlUnescape(),
                             Attachment = (reader["Attachment"] != DBNull.Value ? reader["Attachment"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
@@ -682,7 +675,7 @@ ORDER BY P.CreatedIn DESC LIMIT {offset}, {PageSize};";
                                     : -1,
                                 Title = (reader["CategoryTitle"] != DBNull.Value
                                     ? reader["CategoryTitle"].ToString()
-                                    : "")!
+                                    : "")!.HtmlUnescape()
                             },
                             CountVotes = reader["VoteCount"] == DBNull.Value ? 0 : Convert.ToInt32(reader["VoteCount"]),
                             CountComments = reader["CommentCount"] == DBNull.Value
@@ -1137,7 +1130,7 @@ UPDATE Comments
                             CommentID = reader["CommentID"] != DBNull.Value ? Convert.ToInt32(reader["CommentID"]) : -1,
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             PostID = postId,
-                            Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
+                            Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!.HtmlUnescape(),
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")
@@ -1226,7 +1219,7 @@ WHERE
                             UserID = reader["UserID"] != DBNull.Value ? Convert.ToInt32(reader["UserID"]) : -1,
                             CommentID = commentId,
                             PostID = reader["PostID"] != DBNull.Value ? Convert.ToInt32(reader["PostID"]) : -1,
-                            Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!,
+                            Text = (reader["Text"] != DBNull.Value ? reader["Text"].ToString() : "")!.HtmlUnescape(),
                             UserName = (reader["UserName"] != DBNull.Value ? reader["UserName"].ToString() : "")!,
                             CreatedIn = reader["CreatedIn"] != DBNull.Value
                                 ? Convert.ToDateTime(reader["CreatedIn"]).ToString("yyyy-MM-dd HH:mm:ss")

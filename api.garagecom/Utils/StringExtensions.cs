@@ -1,5 +1,6 @@
 ﻿#region
 
+using System.Net;
 using System.Text.RegularExpressions;
 
 #endregion
@@ -21,6 +22,20 @@ public static class StringExtensions
     private static readonly Regex _multiUnderscores = new(
         @"_+", // one or more _
         RegexOptions.Compiled);
+    
+    
+    /// <summary>
+    ///   Converts any HTML entities (e.g. &#129392;) into their real Unicode chars.
+    /// </summary>
+    public static string HtmlUnescape(this string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return string.Empty;
+
+        // WebUtility.HtmlDecode will handle &#129392; → 🥸 and also named entities (&amp; &lt; etc.)
+        return WebUtility.HtmlDecode(input);
+    }
+    
 
     /// <summary>
     ///     Sanitizes any string into a filename containing only
